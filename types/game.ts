@@ -1,0 +1,14 @@
+export type Screen='menu'|'creation'|'game';
+export type CharacterClass={id:string;name:string;description:string;advantage:string;icon:string;resource:string};
+export type Race={id:string;name:string;description:string;advantage:string;icon:string};
+export type Rarity='רגיל'|'לא שכיח'|'נדיר'|'אפי'|'אגדי'|'מיתי';
+export type Item={id:string;name:string;description:string;type:string;rarity:Rarity;quantity:number;icon:string};
+export type QuestObjective={id:string;text:string;status:'טרם התחיל'|'בתהליך'|'הושלם'};
+export type Quest={id:string;name:string;description:string;active:boolean;objectives:QuestObjective[]};
+export type Player={name:string;classId:string;raceId:string;portrait:string;level:number;experience:number;health:number;maxHealth:number;energy:number;maxEnergy:number;armor:number;gold:number;reputation:number;villageFavor:number;stats:{strength:number;dexterity:number;constitution:number;intelligence:number;wisdom:number;charisma:number}};
+export type DialogueChoice={id:string;text:string;response:string;effects:{gold?:number;reputation?:number;favor?:number}};
+export type Dialogue={speaker:string;portrait:string;text:string;choices:DialogueChoice[]};
+export type Enemy={name:string;health:number;maxHealth:number;damage:number;armor:number};
+export type CombatState={enemy:Enemy;log:string[];defending:boolean;status:'active'|'won'|'lost'|'escaped'};
+export type Settings={music:number;effects:number;textSpeed:number;animations:boolean};
+export type SaveGame={player:Player;quest:Quest;inventory:Item[];storyStep:number;settings:Settings;dialogueComplete:boolean};
