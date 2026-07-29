@@ -1,0 +1,1 @@
+export const texts={title:'הכתר המנופץ',subtitle:'שבעה רסיסים. שבועה אחת. עולם על סף התעוררות.',newJourney:'מסע חדש',continueJourney:'המשך המסע',online:'משחק מקוון',settings:'הגדרות',about:'אודות'} as const;
