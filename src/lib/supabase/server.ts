@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
@@ -31,13 +33,15 @@ export async function createServerSupabaseClient() {
 
 export function createServiceRoleSupabaseClient() {
   const environment = getServerEnvironment();
-  if (!environment.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for this server operation.");
+  if (!environment.SUPABASE_SECRET_KEY) {
+    throw new Error(
+      "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is required for this server operation.",
+    );
   }
 
   return createClient<Database>(
     environment.NEXT_PUBLIC_SUPABASE_URL,
-    environment.SUPABASE_SERVICE_ROLE_KEY,
+    environment.SUPABASE_SECRET_KEY,
     {
       auth: {
         autoRefreshToken: false,

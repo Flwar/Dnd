@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
-const migrationUrl = new URL(
-  "../../supabase/migrations/20260731000100_initial_game_backend.sql",
-  import.meta.url,
-);
+const migrationDirectoryUrl = new URL("../../supabase/migrations/", import.meta.url);
 
 async function migrationText() {
-  return readFile(migrationUrl, "utf8");
+  const fileNames = (await readdir(migrationDirectoryUrl))
+    .filter((fileName) => fileName.endsWith(".sql"))
+    .sort();
+  return (
+    await Promise.all(
+      fileNames.map((fileName) => readFile(new URL(fileName, migrationDirectoryUrl), "utf8")),
+    )
+  ).join("\n");
 }
 
 const protectedTables = [
@@ -120,6 +124,7 @@ test("migration contains no credential-shaped literals", async () => {
   const migration = await migrationText();
 
   assert.doesNotMatch(migration, /SUPABASE_SERVICE_ROLE_KEY\s*=\s*[^\s]/i);
+  assert.doesNotMatch(migration, /SUPABASE_SECRET_KEY\s*=\s*[^\s]/i);
   assert.doesNotMatch(migration, /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/);
   assert.doesNotMatch(migration, /postgres(?:ql)?:\/\/[^\s]+:[^\s]+@/i);
 });
@@ -132,5 +137,7 @@ test("environment helper accepts publishable keys and exposes a safe probe", asy
 
   assert.match(environmentModule, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/);
   assert.match(environmentModule, /NEXT_PUBLIC_SUPABASE_ANON_KEY/);
+  assert.match(environmentModule, /SUPABASE_SECRET_KEY/);
+  assert.doesNotMatch(environmentModule, /NEXT_PUBLIC_SUPABASE_SECRET_KEY/);
   assert.match(environmentModule, /export function isSupabaseConfigured\(\): boolean/);
 });

@@ -25,6 +25,7 @@
     "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload -- --config wrangler.jsonc --keep-vars --minify",
     "cf:typegen": "wrangler types --include-runtime false --env-interface CloudflareEnv cloudflare-env.d.ts",
     "db:validate": "node scripts/validate-migration.mjs",
+    "db:push:hosted": "node scripts/apply-hosted-migrations.mjs",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",

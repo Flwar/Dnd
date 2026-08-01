@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 
-const migrationPath = "supabase/migrations/20260731000100_initial_game_backend.sql";
+const migrationDirectory = "supabase/migrations";
 const seedPath = "supabase/seed.sql";
 const userId = "11111111-1111-4111-a111-111111111111";
 const createCommandId = "22222222-2222-4222-a222-222222222222";
@@ -44,8 +44,13 @@ async function bootstrap(database) {
   `);
 }
 
-function loadMigration() {
-  return readFileSync(migrationPath, "utf8").replace(
+function loadMigrations() {
+  return readdirSync(migrationDirectory)
+    .filter((fileName) => fileName.endsWith(".sql"))
+    .sort()
+    .map((fileName) => readFileSync(`${migrationDirectory}/${fileName}`, "utf8"))
+    .join("\n")
+    .replace(
     /create extension if not exists pgcrypto with schema extensions;/i,
     "-- pgcrypto is emulated by this local validation harness",
   );
@@ -60,7 +65,7 @@ async function main() {
   const database = new PGlite();
   try {
     await bootstrap(database);
-    await database.exec(loadMigration());
+    await database.exec(loadMigrations());
     await database.exec(readFileSync(seedPath, "utf8"));
 
     const tableCount = await scalar(

@@ -56,10 +56,11 @@ Copy `.env.example` to `.env.local` and fill in the values returned by local Sup
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes, unless using the fallback | Browser and server | Current publishable key used by authenticated and anonymous clients. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Alternative | Browser and server | Accepted fallback for older Supabase projects; do not set it when the publishable key is available. |
 | `NEXT_PUBLIC_SITE_URL` | Yes outside local defaults | Browser and server | Canonical origin used in metadata, email confirmation, and password recovery redirects. Do not include a trailing slash. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes for complete online play and chapter rewards | Server only | Executes authoritative party-command, item-use, loot, and reward resolution. Single-player user-scoped saves do not need it. Never prefix it with `NEXT_PUBLIC_`, expose it to a Client Component, or commit it. |
-| `SUPABASE_DB_URL` | Optional | Server/CLI only | Direct database connection string for manual administrative SQL where needed. `npm run db:validate` does not use it. |
+| `SUPABASE_SECRET_KEY` | Yes for complete online play and chapter rewards | Server only | Preferred current key for authoritative party-command, item-use, loot, and reward resolution. Vercel's Supabase Marketplace integration injects it automatically. Never prefix it with `NEXT_PUBLIC_`, expose it to a Client Component, or commit it. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Legacy alternative | Server only | Accepted only as a compatibility fallback for older Supabase projects. Do not set it when `SUPABASE_SECRET_KEY` is available. |
+| `SUPABASE_DB_URL` | Optional | Server/CLI only | Direct database connection string for manual administrative SQL where needed. Vercel Marketplace normally supplies `POSTGRES_URL_NON_POOLING` instead. `npm run db:validate` does not use either value. |
 
-Never commit `.env.local`, `.dev.vars`, database passwords, service-role keys, access tokens, or generated hosting credentials. `.dev.vars.example` contains only the non-secret OpenNext preview selector and is safe to copy.
+Never commit `.env.local`, `.dev.vars`, database passwords, Supabase secret/service-role keys, access tokens, or generated hosting credentials. `.dev.vars.example` contains only the non-secret OpenNext preview selector and is safe to copy.
 
 ## Local setup
 
@@ -216,7 +217,9 @@ Set `PLAYWRIGHT_BASE_URL` to exercise an already-running preview or deployed ori
 
 ## Deploying to Vercel
 
-Provision and migrate Supabase first. Then add the required variables to Vercel for Preview and Production, using separate Supabase projects when possible. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
+Provision and migrate Supabase first. The Vercel Supabase Marketplace integration supplies `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and PostgreSQL connection variables automatically. If configuring the project manually, add the same variables for Preview and Production and keep all secret/database values server-only.
+
+To apply committed migrations to a hosted project from a trusted administrative environment, set `RUN_HOSTED_MIGRATIONS=1` and provide `SUPABASE_DB_URL` or Vercel Marketplace's `POSTGRES_URL_NON_POOLING`, then run `npm run db:push:hosted`. The script does nothing unless the explicit guard is enabled, performs a dry-run preflight, uses the pinned local CLI, and redacts the connection URL from child-process output. Standalone Node scripts do not load `.env.local` automatically; export the values in the trusted shell or run through an environment-aware deployment job.
 
 Deploy through the Vercel dashboard by importing the Git repository, or use the CLI:
 
@@ -227,6 +230,8 @@ npx vercel --prod
 ```
 
 After the production domain is known:
+
+Connecting the Marketplace integration does not configure Supabase Auth redirect URLs for you.
 
 1. Set `NEXT_PUBLIC_SITE_URL` to the final HTTPS origin in Vercel.
 2. Add the same origin and `/auth/callback` URL to Supabase Auth URL Configuration.
@@ -279,7 +284,7 @@ Before production deployment, configure these values in the Worker runtime setti
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or the legacy anon-key fallback)
 - `NEXT_PUBLIC_SITE_URL`, set to the final HTTPS Worker or custom-domain origin
-- `SUPABASE_SERVICE_ROLE_KEY` as an encrypted Cloudflare secret, never as a public variable
+- `SUPABASE_SECRET_KEY` (or the legacy service-role fallback) as an encrypted Cloudflare secret, never as a public variable
 
 The `NEXT_PUBLIC_...` values must also be available during the Next.js build because Next.js inlines them in browser bundles. When Cloudflare Workers Builds builds from Git, add them under **Build variables and secrets** as well as the Worker runtime settings. Every Cloudflare script explicitly selects `wrangler.jsonc`; dry-run, upload, and deploy also disable Wrangler autoconfiguration so stale output from another adapter cannot redirect a release. The deploy and upload scripts forward `--keep-vars` so dashboard-managed runtime values are not removed.
 
@@ -296,7 +301,7 @@ After the first deployment, add `https://YOUR_WORKER_OR_DOMAIN/auth/callback` to
 ## Known release limitations
 
 - The repository does not provision a Supabase project, custom SMTP provider, DNS, Vercel project, Cloudflare account, or production secrets.
-- Complete online party resolution and chapter rewards require the server-only service-role key. The public key alone is intentionally insufficient.
+- Complete online party resolution and chapter rewards require the server-only Supabase secret key (or legacy service-role key). The public key alone is intentionally insufficient.
 - The MVP voting rule has no authoritative countdown: each member votes and the leader breaks a tie.
 - Audio is currently generated procedurally through Web Audio; no recorded ambience or licensed sound pack is shipped.
 - Cloudflare R2 incremental caching is not configured. Current authenticated game routes are dynamic and persistent game data remains in Supabase.

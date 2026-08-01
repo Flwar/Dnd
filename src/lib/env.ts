@@ -17,6 +17,7 @@ const rawPublicEnvironmentSchema = z
   );
 
 const serverEnvironmentSchema = rawPublicEnvironmentSchema.and(z.object({
+  SUPABASE_SECRET_KEY: z.string().min(20).optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
   SUPABASE_DB_URL: z.string().url().optional(),
 }));
@@ -27,9 +28,13 @@ export type PublicEnvironment = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: string;
 };
 export type ServerEnvironment = PublicEnvironment & {
-  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_SECRET_KEY?: string;
   SUPABASE_DB_URL?: string;
 };
+
+function optionalEnvironmentValue(value: string | undefined): string | undefined {
+  return value === "" ? undefined : value;
+}
 
 function readableEnvironmentError(error: z.ZodError): Error {
   const missing = error.issues.map((issue) => issue.path.join(".")).join(", ");
@@ -38,11 +43,13 @@ function readableEnvironmentError(error: z.ZodError): Error {
 
 export function getPublicEnvironment(): PublicEnvironment {
   const result = rawPublicEnvironmentSchema.safeParse({
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_SITE_URL: optionalEnvironmentValue(process.env.NEXT_PUBLIC_SITE_URL),
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      optionalEnvironmentValue(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: optionalEnvironmentValue(
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    ),
   });
 
   if (!result.success) throw readableEnvironmentError(result.error);
@@ -57,11 +64,13 @@ export function getPublicEnvironment(): PublicEnvironment {
 
 export function isSupabaseConfigured(): boolean {
   return rawPublicEnvironmentSchema.safeParse({
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_SITE_URL: optionalEnvironmentValue(process.env.NEXT_PUBLIC_SITE_URL),
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      optionalEnvironmentValue(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: optionalEnvironmentValue(
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    ),
   }).success;
 }
 
@@ -85,13 +94,18 @@ export function getServerEnvironment(): ServerEnvironment {
   }
 
   const result = serverEnvironmentSchema.safeParse({
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_SITE_URL: optionalEnvironmentValue(process.env.NEXT_PUBLIC_SITE_URL),
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    SUPABASE_DB_URL: process.env.SUPABASE_DB_URL,
+      optionalEnvironmentValue(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: optionalEnvironmentValue(
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    ),
+    SUPABASE_SECRET_KEY: optionalEnvironmentValue(process.env.SUPABASE_SECRET_KEY),
+    SUPABASE_SERVICE_ROLE_KEY: optionalEnvironmentValue(
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    ),
+    SUPABASE_DB_URL: optionalEnvironmentValue(process.env.SUPABASE_DB_URL),
   });
 
   if (!result.success) throw readableEnvironmentError(result.error);
@@ -101,7 +115,8 @@ export function getServerEnvironment(): ServerEnvironment {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       result.data.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
       result.data.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    SUPABASE_SERVICE_ROLE_KEY: result.data.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_SECRET_KEY:
+      result.data.SUPABASE_SECRET_KEY ?? result.data.SUPABASE_SERVICE_ROLE_KEY,
     SUPABASE_DB_URL: result.data.SUPABASE_DB_URL,
   };
 }

@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getSiteUrl } from "@/lib/env";
+import { getServerEnvironment, getSiteUrl } from "@/lib/env";
+
+function stubSupabaseEnvironment() {
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+  vi.stubEnv(
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "sb_publishable_environment_test_key",
+  );
+}
 
 describe("כתובת סביבת האירוח", () => {
   afterEach(() => {
@@ -28,5 +36,31 @@ describe("כתובת סביבת האירוח", () => {
   it("דוחה כתובת ציבורית לא תקינה", () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "not-a-url");
     expect(() => getSiteUrl()).toThrow(/Missing or invalid environment configuration/);
+  });
+});
+
+describe("מפתחות שרת של Supabase", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("משתמש במפתח הסודי החדש שמוזרק דרך Vercel Marketplace", () => {
+    stubSupabaseEnvironment();
+    vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_marketplace_environment_test_key");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "legacy_service_role_environment_test_key");
+
+    expect(getServerEnvironment().SUPABASE_SECRET_KEY).toBe(
+      "sb_secret_marketplace_environment_test_key",
+    );
+  });
+
+  it("תומך במפתח service role ישן כחלופה", () => {
+    stubSupabaseEnvironment();
+    vi.stubEnv("SUPABASE_SECRET_KEY", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "legacy_service_role_environment_test_key");
+
+    expect(getServerEnvironment().SUPABASE_SECRET_KEY).toBe(
+      "legacy_service_role_environment_test_key",
+    );
   });
 });
