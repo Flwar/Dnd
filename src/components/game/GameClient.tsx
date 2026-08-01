@@ -7,6 +7,7 @@ import { usePartyGame } from "@/hooks/use-party-game";
 import { DiceOverlay } from "@/components/game/DiceOverlay";
 import { GameNotifications } from "@/components/game/GameNotifications";
 import { GameScene } from "@/components/game/GameScene";
+import { GameModeShell } from "@/components/game/GameModeShell";
 import { OpeningCinematic } from "@/components/game/OpeningCinematic";
 import { DialoguePanel } from "@/components/dialogue/DialoguePanel";
 import { GameStoreProvider, useGameStore } from "@/store/game-store";
@@ -211,6 +212,7 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
   const lastClockRef = useRef<number | null>(null);
   const recoveredCacheRef = useRef(false);
   const resolvedCombatRef = useRef(new Set<string>());
+  const afterDiceRef = useRef<null | (() => void)>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [combatBusy, setCombatBusy] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(chapterComplete);
@@ -232,6 +234,16 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
   useEffect(() => {
     versionRef.current = expectedVersion;
   }, [expectedVersion]);
+
+  const combatAmbience = combat
+    ? combat.encounterId === "stone-guardian-boss" ? "boss" as const : "combat" as const
+    : null;
+
+  useEffect(() => {
+    if (!combatAmbience) return;
+    void audioManager.setAmbience(combatAmbience);
+    return () => audioManager.stopAmbience(combatAmbience);
+  }, [combatAmbience]);
 
   const notify = useCallback((type: GameNotification["type"], title: string, message: string, deduplicationKey?: string) => {
     const notification: Notification = { id: makeId("notice"), type, title, message, createdAt: new Date().toISOString(), deduplicationKey };
@@ -371,10 +383,10 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
         }
       }
       changed = true;
-      const resultRecord = asRecord(rawResult);
-      if (resultRecord?.character_id === next.character.id) {
-        setDice({ result, skillLabel: skillLabels[interaction.skillCheck.skill] });
-      }
+      // Every party member sees the same authoritative roll. The command's
+      // character id identifies who rolled, but the shared result belongs to
+      // the whole synchronized scene.
+      setDice({ result, skillLabel: skillLabels[interaction.skillCheck.skill] });
     }
     if (changed) void commit(next, "party-skill-check");
   }, [applyEffects, commit, onlineParty, partyGame.session, setDialogueNodeId, setDice]);
@@ -440,6 +452,13 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     void commit(current, `checkpoint:${encounter.checkpointId}`, true);
   }, [commit, notify, setCheckpoint, setCombat]);
 
+  const closeDice = useCallback(() => {
+    const afterDice = afterDiceRef.current;
+    afterDiceRef.current = null;
+    setDice(null);
+    if (afterDice) queueMicrotask(afterDice);
+  }, [setDice]);
+
   const handleInteraction = useCallback((interaction: LocationInteraction) => {
     if (onlineParty) {
       void (async () => {
@@ -475,21 +494,46 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     let next = saveRef.current;
     if (interaction.oneTime && next.story.flags[`interaction_${interaction.id}_completed`]) return;
     let effects: StoryEffect[] = [...(interaction.effects ?? [])];
+    let rollFeedback: (() => void) | null = null;
     if (interaction.skillCheck) {
       const result = resolveSkillCheck(Date.now() >>> 0, interaction.skillCheck, next.character.attributes, 2 + Math.floor((next.character.level - 1) / 4));
       audioManager.play("dice");
       setDice({ result, skillLabel: skillLabels[interaction.skillCheck.skill] });
       effects = [...effects, ...effectsForRoll(interaction.skillCheck, result.outcome)];
-      notify(result.outcome.includes("success") ? "discovery" : "error", result.outcome.includes("success") ? "הבדיקה הצליחה" : "הבדיקה נכשלה", result.outcome.includes("success") ? "הבחנת בפרט שישנה את הדרך קדימה." : "הכישלון פתח תוצאה אחרת — המסע ממשיך.");
+      rollFeedback = () => notify(
+        result.outcome.includes("success") ? "discovery" : "error",
+        result.outcome.includes("success") ? "הבדיקה הצליחה" : "הבדיקה נכשלה",
+        result.outcome.includes("success") ? "הבחנת בפרט שישנה את הדרך קדימה." : "הכישלון פתח תוצאה אחרת — המסע ממשיך.",
+      );
     }
     next = applyEffects(next, effects, `interaction:${interaction.id}`);
     if (interaction.oneTime) next = withStoryFlag(next, `interaction_${interaction.id}_completed`, true);
     if (interaction.dialogueNodeId) next = openDialogue(interaction.dialogueNodeId, next);
     replaceSave(next);
     const shouldSkipRoadAmbush = interaction.encounterId === "road-ambush" && Boolean(next.story.flags.road_ambush_avoided);
-    if (interaction.encounterId && !shouldSkipRoadAmbush) beginEncounter(next, interaction.encounterId);
+    const startEncounter = interaction.encounterId && !shouldSkipRoadAmbush
+      ? () => beginEncounter(next, interaction.encounterId as string)
+      : null;
+    const announceSkippedAmbush = shouldSkipRoadAmbush
+      ? () => notify("discovery", "המערב נחשף", "עקפת את היצורים מבלי להיגרר לקרב.")
+      : null;
+
+    if (rollFeedback) {
+      // Let the roll land and reveal before an encounter replaces exploration.
+      // The continuation is single-use and runs only when the player closes
+      // the locked dice presentation.
+      afterDiceRef.current = () => {
+        rollFeedback?.();
+        announceSkippedAmbush?.();
+        startEncounter?.();
+      };
+      if (!startEncounter) void commit(next, interaction.dialogueNodeId ? "dialogue-opened" : "interaction-completed");
+      return;
+    }
+
+    if (startEncounter) startEncounter();
     else void commit(next, interaction.dialogueNodeId ? "dialogue-opened" : "interaction-completed");
-    if (shouldSkipRoadAmbush) notify("discovery", "המערב נחשף", "עקפת את היצורים מבלי להיגרר לקרב.");
+    announceSkippedAmbush?.();
   }, [applyEffects, beginEncounter, commit, notify, onlineParty, openDialogue, partyGame, replaceSave, setDice]);
 
   const applyResolvedDialogueChoice = useCallback((choice: DialogueChoice, nodeId: string, authoritativeRoll?: DiceResult) => {
@@ -861,14 +905,9 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     }));
   }, [combat]);
 
-  return <>
-    <GameScene save={save} saveStatus={saveStatus} onInteraction={handleInteraction} onTravel={handleTravel} onOpenPanel={setActivePanel} onManualSave={() => void commit(saveRef.current, "manual-save")} onReturnToMenu={() => void returnToMenu()} />
-    <DialoguePanel nodeId={dialogueNodeId} save={save} onChoice={handleDialogueChoice} onClose={() => setDialogueNodeId(null)} />
-    <DiceOverlay presentation={dice} onClose={() => setDice(null)} />
-    <GamePanels panel={activePanel} save={save} onClose={() => setActivePanel(null)} onEquip={handleEquip} onUnequip={handleUnequip} onUse={handleUseItem} onDrop={handleDrop} onBuy={handleBuy} />
-    {combat && playerCombatant ? <CombatScene
+  const combatScreen = combat ? <CombatScene
       state={combat}
-      playerCombatantId={playerCombatant.id}
+      playerCombatantId={playerCombatant?.id ?? save.character.id}
       abilities={abilitiesById}
       items={combatItems}
       statusDefinitions={statusesById}
@@ -884,11 +923,20 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
       onEscape={() => submitPlayerAction({ kind: "escape" })}
       onRetry={retryCombat}
       onContinue={continueAfterCombat}
-    /> : null}
+    /> : null;
+
+  const explorationScreen = <>
+    <GameScene save={save} saveStatus={saveStatus} onInteraction={handleInteraction} onTravel={handleTravel} onOpenPanel={setActivePanel} onManualSave={() => void commit(saveRef.current, "manual-save")} onReturnToMenu={() => void returnToMenu()} />
+    <DialoguePanel nodeId={dialogueNodeId} save={save} onChoice={handleDialogueChoice} onClose={() => setDialogueNodeId(null)} />
+    <GamePanels panel={activePanel} save={save} onClose={() => setActivePanel(null)} onEquip={handleEquip} onUnequip={handleUnequip} onUse={handleUseItem} onDrop={handleDrop} onBuy={handleBuy} />
     <OpeningCinematic open={cinematicOpen} onFinish={finishCinematic} />
     <ChapterSummary open={summaryOpen} save={save} onReturnToMenu={() => void returnToMenu()} onClose={() => setSummaryOpen(false)} />
-    <GameNotifications />
-    {partySessionId ? <div className="fixed start-3 top-20 z-50 max-w-[min(20rem,calc(100vw-1.5rem))] border border-[#62c6df]/35 bg-[#07151b]/95 px-3 py-2 text-xs text-[#9eeaff] shadow-xl" role="status" aria-live="polite">
+  </>;
+
+  const persistentUI = <>
+    <DiceOverlay presentation={dice} onClose={closeDice} />
+    {!dice ? <GameNotifications /> : null}
+    {partySessionId && !combatScreen ? <div className="fixed start-3 top-20 z-50 max-w-[min(20rem,calc(100vw-1.5rem))] border border-[#62c6df]/35 bg-[#07151b]/95 px-3 py-2 text-xs text-[#9eeaff] shadow-xl" role="status" aria-live="polite">
       <b className="block text-[#d8f7ff]">{partyGame.connectionMessage}</b>
       <span>{isPartyLeader ? "אתם מובילי החבורה" : "הפעולות הסיפוריות מוכרעות בידי החבורה"}</span>
       {dialogueNodeId ? (() => {
@@ -897,4 +945,6 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
       })() : null}
     </div> : null}
   </>;
+
+  return <GameModeShell combat={combatScreen} exploration={explorationScreen} persistent={persistentUI} />;
 }

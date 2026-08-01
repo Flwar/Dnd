@@ -30,7 +30,7 @@ const characterSchema = z
     description: z.string().max(600),
     formOfAddress: z.string().max(40).nullable(),
     raceId: z.enum(["human", "elf", "dwarf", "halfling", "orc", "dragonborn"]),
-    classId: z.enum(["fighter", "mage", "rogue", "ranger", "cleric", "barbarian"]),
+    classId: z.enum(["fighter", "mage", "rogue", "ranger", "cleric", "barbarian", "king"]),
     backgroundId: z.enum([
       "former-soldier",
       "wandering-scholar",

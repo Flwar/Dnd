@@ -72,6 +72,23 @@ describe("ציוד והגבלות", () => {
     expect(result).toMatchObject({ ok: false, code: "CLASS_RESTRICTED" });
   });
 
+  it("שומר את כתר המלך למקצוע המורשה ואינו מאפשר להשליך אותו", () => {
+    const crown = itemsById["crown-of-the-shattered-king"];
+    const inventory = [entry("royal-crown", crown.id)];
+    const denied = equipItem(
+      { classId: "fighter", raceId: "human", level: 1, inventory, equipment: {}, itemsById },
+      "royal-crown",
+    );
+    const allowed = equipItem(
+      { classId: "king", raceId: "human", level: 1, inventory, equipment: {}, itemsById },
+      "royal-crown",
+    );
+
+    expect(denied).toMatchObject({ ok: false, code: "CLASS_RESTRICTED" });
+    expect(allowed).toMatchObject({ ok: true, value: { helmet: "royal-crown" } });
+    expect(dropItem(inventory, "royal-crown", crown, 1, true)).toMatchObject({ ok: false, code: "QUEST_ITEM" });
+  });
+
   it("מונע יד משנית כאשר נשק דו־ידני מצויד", () => {
     const shield = {
       ...itemsById["chain-shirt"],

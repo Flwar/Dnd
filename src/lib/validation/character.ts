@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { pointBuyCost } from "@/game/character";
 import { racePortraitKeys } from "@/lib/assets/manifest";
+import { parseCustomPortraitKey } from "@/lib/portrait-upload";
 
 const racePortraitKeySet = new Set<string>(racePortraitKeys);
 
@@ -19,9 +20,12 @@ export const characterDraftSchema = z
     description: z.string().trim().max(240, "התיאור יכול להכיל עד מאתיים וארבעים תווים."),
     formOfAddress: z.string().trim().max(32, "צורת הפנייה ארוכה מדי."),
     raceId: z.enum(["human", "elf", "dwarf", "halfling", "orc", "dragonborn"]),
-    classId: z.enum(["fighter", "mage", "rogue", "ranger", "cleric", "barbarian"]),
+    classId: z.enum(["fighter", "mage", "rogue", "ranger", "cleric", "barbarian", "king"]),
     backgroundId: z.enum(["former-soldier", "wandering-scholar", "border-hunter", "former-criminal", "fallen-noble", "temple-servant", "road-orphan"]),
-    portraitKey: z.string().refine((key) => racePortraitKeySet.has(key), "יש לבחור דיוקן זמין."),
+    portraitKey: z.string().refine(
+      (key) => racePortraitKeySet.has(key) || parseCustomPortraitKey(key) !== null,
+      "יש לבחור דיוקן זמין.",
+    ),
     attributes: attributesSchema,
   })
   .refine((value) => pointBuyCost(value.attributes) <= 27, { path: ["attributes"], message: "חרגת מתקציב התכונות." });

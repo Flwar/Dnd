@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Dices, MessageCircle, X } from "lucide-react";
+import { Dices, LoaderCircle, MessageCircle, Square, Volume2, X } from "lucide-react";
 import { GameButton } from "@/components/ui/GameButton";
 import { availableChoices } from "@/game/dialogue";
 import { dialoguesById } from "@/content/dialogues";
 import { npcsById } from "@/content/npcs";
 import { getAssetPath } from "@/lib/assets/manifest";
+import { voiceManager, type VoicePlaybackResult } from "@/lib/audio/voice-manager";
 import type { DialogueChoice, SaveData } from "@/types/game";
 
 const approachLabels: Record<DialogueChoice["approach"], string> = {
@@ -22,6 +23,8 @@ const approachLabels: Record<DialogueChoice["approach"], string> = {
   "background-specific": "רקע",
 };
 
+type VoiceStatus = "idle" | "loading" | "speaking" | "unsupported" | "disabled" | "failed";
+
 export function DialoguePanel({
   nodeId,
   save,
@@ -35,6 +38,8 @@ export function DialoguePanel({
 }) {
   const node = nodeId ? dialoguesById[nodeId] : undefined;
   const npc = node ? npcsById[node.npcId] : undefined;
+  const [voicePlayback, setVoicePlayback] = useState<{ nodeId: string | null; status: VoiceStatus }>({ nodeId: null, status: "idle" });
+  const voiceStatus: VoiceStatus = voicePlayback.nodeId === node?.id ? voicePlayback.status : "idle";
   const choices = useMemo(
     () => node ? availableChoices(node.choices, { character: save.character, story: save.story, inventory: save.inventory, quests: save.quests }) : [],
     [node, save.character, save.story, save.inventory, save.quests],
@@ -51,6 +56,28 @@ export function DialoguePanel({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [node, choices, onChoice, onClose]);
+
+  useEffect(() => {
+    voiceManager.stop();
+    return () => voiceManager.stop();
+  }, [node?.id]);
+
+  const toggleVoice = async () => {
+    if (!node || !npc) return;
+    const setCurrentVoiceStatus = (status: VoiceStatus) => setVoicePlayback({ nodeId: node.id, status });
+    if (voiceStatus === "speaking" || voiceStatus === "loading") {
+      voiceManager.stop();
+      setCurrentVoiceStatus("idle");
+      return;
+    }
+    setCurrentVoiceStatus("loading");
+    const result: VoicePlaybackResult = await voiceManager.speak(npc.id, node.text, {
+      onStart: () => setCurrentVoiceStatus("speaking"),
+      onEnd: () => setCurrentVoiceStatus("idle"),
+      onError: () => setCurrentVoiceStatus("failed"),
+    });
+    if (result !== "started") setCurrentVoiceStatus(result);
+  };
 
   return (
     <AnimatePresence>
@@ -81,8 +108,23 @@ export function DialoguePanel({
                     <p className="text-xs text-[#9e968a]">{npc.title} · {node.emotionalState}</p>
                   </div>
                 </div>
-                <GameButton variant="ghost" size="icon" onClick={onClose} aria-label="סגירת השיחה"><X className="size-5" aria-hidden="true" /></GameButton>
+                <div className="flex shrink-0 items-center gap-1">
+                  <GameButton
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void toggleVoice()}
+                    aria-label={voiceStatus === "speaking" || voiceStatus === "loading" ? `הפסקת הקול של ${npc.name}` : `השמעת הקול של ${npc.name}`}
+                    aria-pressed={voiceStatus === "speaking"}
+                    title={voiceStatus === "speaking" ? "הפסקת הדיבור" : "השמעת הדיבור"}
+                  >
+                    {voiceStatus === "loading" ? <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : voiceStatus === "speaking" ? <Square className="size-4 fill-current" aria-hidden="true" /> : <Volume2 className="size-5" aria-hidden="true" />}
+                  </GameButton>
+                  <GameButton variant="ghost" size="icon" onClick={onClose} aria-label="סגירת השיחה"><X className="size-5" aria-hidden="true" /></GameButton>
+                </div>
               </header>
+              {voiceStatus === "unsupported" ? <p className="mb-3 border border-[#c6a15b]/25 bg-black/25 px-3 py-2 text-xs text-[#c9c0b2]" role="status">לא נמצא במכשיר קול עברי. אפשר להמשיך לקרוא את השיחה כרגיל.</p> : null}
+              {voiceStatus === "disabled" ? <p className="mb-3 border border-[#c6a15b]/25 bg-black/25 px-3 py-2 text-xs text-[#c9c0b2]" role="status">קולות הדמויות כבויים בהגדרות השמע.</p> : null}
+              {voiceStatus === "failed" ? <p className="mb-3 border border-[#d05b54]/30 bg-[#2b1116]/35 px-3 py-2 text-xs text-[#ffd0cb]" role="status">לא הצלחנו להשמיע את הקול. הטקסט נשאר זמין לקריאה.</p> : null}
               <motion.p key={node.id} className="mb-5 border-r-2 border-[#c6a15b]/60 pr-4 text-base leading-8 text-[#e8dfce] sm:text-lg" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{node.text}</motion.p>
               <div className="grid gap-2" aria-label="אפשרויות תשובה">
                 {choices.map((choice, index) => (

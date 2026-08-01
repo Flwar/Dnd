@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { GameButton } from "@/components/ui/GameButton";
+import { acquireBodyScrollLock } from "@/lib/body-scroll-lock";
 import { cn } from "@/lib/cn";
 
 type ModalProps = {
@@ -13,11 +14,12 @@ type ModalProps = {
   onClose: () => void;
   children: React.ReactNode;
   className?: string;
+  overlayClassName?: string;
   closeLabel?: string;
   allowClose?: boolean;
 };
 
-export function Modal({ open, title, onClose, children, className, closeLabel = "סגירת החלון", allowClose = true }: ModalProps) {
+export function Modal({ open, title, onClose, children, className, overlayClassName, closeLabel = "סגירת החלון", allowClose = true }: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -35,6 +37,10 @@ export function Modal({ open, title, onClose, children, className, closeLabel = 
     ) ?? []);
     window.setTimeout(() => focusables()[0]?.focus(), 0);
     const onKeyDown = (event: KeyboardEvent) => {
+      // A modal owns keyboard input while it is open. In particular, this
+      // prevents game and dialogue shortcuts registered on `window` from
+      // acting on obscured controls beneath the modal.
+      event.stopPropagation();
       if (event.key === "Escape" && allowClose) {
         event.preventDefault();
         closeRef.current();
@@ -54,10 +60,10 @@ export function Modal({ open, title, onClose, children, className, closeLabel = 
       }
     };
     document.addEventListener("keydown", onKeyDown);
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquireBodyScrollLock();
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
+      releaseScrollLock();
       previous?.focus();
     };
   }, [open, allowClose]);
@@ -67,7 +73,7 @@ export function Modal({ open, title, onClose, children, className, closeLabel = 
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/78 p-0 backdrop-blur-sm sm:p-5"
+          className={cn("fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/78 p-0 backdrop-blur-sm sm:p-5", overlayClassName)}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

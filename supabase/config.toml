@@ -32,6 +32,11 @@ port = 54324
 enabled = true
 file_size_limit = "20MiB"
 
+[storage.buckets.character-portraits]
+public = true
+file_size_limit = "2MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
+
 [auth]
 enabled = true
 site_url = "http://localhost:3000"

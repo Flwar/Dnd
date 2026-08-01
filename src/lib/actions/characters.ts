@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { characterDraftSchema, type CharacterDraftInput } from "@/lib/validation/character";
 import { isSupabaseConfigured } from "@/lib/env";
+import { parseCustomPortraitKey } from "@/lib/portrait-upload";
 
 type CharacterActionResult = { ok: true; characterId: string } | { ok: false; message: string; fields?: Record<string, string> };
 
@@ -18,6 +19,20 @@ export async function createCharacterAction(input: CharacterDraftInput, commandI
     const supabase = await createServerSupabaseClient();
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) return { ok: false, message: "החיבור לחשבון פג. יש להתחבר מחדש." };
+    if (parsed.data.classId === "king") {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("account_role,is_king")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+      if (profileError || profile?.account_role !== "administrator" || profile.is_king !== true) {
+        return { ok: false, message: "מקצוע המלך זמין רק לחשבון שקיבל את סמכות הכתר." };
+      }
+    }
+    const customPortrait = parseCustomPortraitKey(parsed.data.portraitKey);
+    if (customPortrait && customPortrait.ownerId !== auth.user.id) {
+      return { ok: false, message: "אין הרשאה להשתמש בדיוקן הזה." };
+    }
     const { data, error } = await supabase.rpc("create_character", {
       p_name: parsed.data.name,
       p_race_id: parsed.data.raceId,
@@ -30,7 +45,13 @@ export async function createCharacterAction(input: CharacterDraftInput, commandI
       p_command_id: commandId,
     });
     if (error) {
-      const message = error.message.includes("POINT_BUY") ? "תקציב התכונות אינו תקין." : error.message.includes("INVALID_") ? "אחת מבחירות הדמות אינה תקינה." : "לא הצלחנו לשמור את הדמות. אפשר לנסות שוב.";
+      const message = error.message.includes("KING_CLASS_FORBIDDEN")
+        ? "מקצוע המלך זמין רק לחשבון שקיבל את סמכות הכתר."
+        : error.message.includes("POINT_BUY")
+          ? "תקציב התכונות אינו תקין."
+          : error.message.includes("INVALID_")
+            ? "אחת מבחירות הדמות אינה תקינה."
+            : "לא הצלחנו לשמור את הדמות. אפשר לנסות שוב.";
       return { ok: false, message };
     }
     const result = data as { character_id?: string } | null;

@@ -7,6 +7,10 @@ const seedPath = "supabase/seed.sql";
 const userId = "11111111-1111-4111-a111-111111111111";
 const createCommandId = "22222222-2222-4222-a222-222222222222";
 const saveCommandId = "33333333-3333-4333-a333-333333333333";
+const presenceConnectionOne = "44444444-4444-4444-a444-444444444444";
+const presenceConnectionTwo = "55555555-5555-4555-a555-555555555555";
+const customPortraitObjectId = "66666666-6666-4666-a666-666666666666";
+const customPortraitCommandId = "77777777-7777-4777-a777-777777777777";
 
 async function bootstrap(database) {
   await database.exec(`
@@ -40,6 +44,26 @@ async function bootstrap(database) {
         substr(md5(random()::text || clock_timestamp()::text), 1, length * 2),
         'hex'
       )
+    $$;
+    create schema storage;
+    create table storage.buckets (
+      id text primary key,
+      name text not null unique,
+      public boolean not null default false,
+      file_size_limit bigint,
+      allowed_mime_types text[]
+    );
+    create table storage.objects (
+      id uuid primary key default public.gen_random_uuid(),
+      bucket_id text not null references storage.buckets(id),
+      name text not null,
+      owner_id text,
+      metadata jsonb not null default '{}'::jsonb,
+      unique (bucket_id, name)
+    );
+    alter table storage.objects enable row level security;
+    create function storage.extension(name text) returns text language sql immutable as $$
+      select lower(substring(name from '\\.([^.]*)$'))
     $$;
   `);
 }
@@ -81,8 +105,8 @@ async function main() {
       "select count(*)::int from information_schema.routines where routine_schema in ('public', 'private')",
     );
     const rewardCount = await scalar(database, "select count(*)::int from public.reward_definitions");
-    assert.equal(tableCount, 21);
-    assert.equal(policyCount, 23);
+    assert.equal(tableCount, 23);
+    assert.equal(policyCount, 25);
     assert.ok(functionCount >= 34);
     assert.equal(rewardCount, 6);
 
@@ -93,6 +117,119 @@ async function main() {
     await database.query(
       "select set_config('request.jwt.claim.sub', $1, false), set_config('request.jwt.claim.role', 'authenticated', false)",
       [userId],
+    );
+
+    await scalar(
+      database,
+      "select public.heartbeat_player_presence($1::uuid)",
+      [presenceConnectionOne],
+    );
+    await scalar(
+      database,
+      "select public.heartbeat_player_presence($1::uuid)",
+      [presenceConnectionTwo],
+    );
+    assert.equal(
+      await scalar(
+        database,
+        "select count(*)::int from public.player_presence_events where event_type = 'joined'",
+      ),
+      1,
+    );
+    const onlinePlayer = (
+      await database.query("select * from public.get_online_players()")
+    ).rows[0];
+    assert.equal(onlinePlayer.display_name, "גיבור");
+    assert.equal(onlinePlayer.connection_count, 2);
+    assert.equal("email" in onlinePlayer, false);
+
+    await scalar(
+      database,
+      "select public.disconnect_player_presence($1::uuid)",
+      [presenceConnectionOne],
+    );
+    assert.equal(
+      await scalar(
+        database,
+        "select count(*)::int from public.player_presence_events where event_type = 'left'",
+      ),
+      0,
+    );
+    await scalar(
+      database,
+      "select public.disconnect_player_presence($1::uuid)",
+      [presenceConnectionTwo],
+    );
+    assert.equal(
+      await scalar(
+        database,
+        "select count(*)::int from public.player_presence_events where event_type = 'left'",
+      ),
+      1,
+    );
+
+    const customPortraitPath = `${userId}/${customPortraitObjectId}.png`;
+    const customPortraitKey = `custom:${customPortraitPath}`;
+    await database.query(
+      "insert into storage.objects (bucket_id, name, owner_id, metadata) values ('character-portraits', $1, $2, $3::jsonb)",
+      [customPortraitPath, userId, JSON.stringify({ mimetype: "image/png", size: 128 })],
+    );
+    const customCreateResult = await scalar(
+      database,
+      "select public.create_character($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::uuid)",
+      [
+        "נריה",
+        "human",
+        "fighter",
+        "former-soldier",
+        customPortraitKey,
+        JSON.stringify({
+          strength: 10,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 10,
+        }),
+        "",
+        null,
+        customPortraitCommandId,
+      ],
+    );
+    assert.equal(
+      await scalar(database, "select portrait_key from public.characters where id = $1", [customCreateResult.character_id]),
+      customPortraitKey,
+    );
+    const duplicateCustomCreate = await scalar(
+      database,
+      "select public.create_character($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::uuid)",
+      [
+        "שם שלא יחליף",
+        "human",
+        "fighter",
+        "former-soldier",
+        "portrait-human-05",
+        JSON.stringify({
+          strength: 10,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 10,
+        }),
+        "",
+        null,
+        customPortraitCommandId,
+      ],
+    );
+    assert.equal(duplicateCustomCreate.duplicate, true);
+    assert.equal(
+      await scalar(database, "select portrait_key from public.characters where id = $1", [customCreateResult.character_id]),
+      customPortraitKey,
+    );
+    assert.equal(
+      await scalar(database, "select private.can_delete_character_portrait($1)", [customPortraitPath]),
+      false,
     );
 
     const createResult = await scalar(

@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { GameButton } from "@/components/ui/GameButton";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { itemsById } from "@/content/items";
 import { questsById } from "@/content/quests";
 import { locationsById } from "@/content/locations";
@@ -132,9 +133,8 @@ function CharacterPanel({ save }: { save: SaveData }) {
   const background = backgroundsById[save.character.backgroundId];
   return <div className="grid gap-6 md:grid-cols-[16rem_1fr]">
     <div>
-      <div className="overflow-hidden border border-[#c6a15b]/45 bg-black/35">
-        {/* eslint-disable-next-line @next/next/no-img-element -- generated local portrait */}
-        <img src={getAssetPath(save.character.portraitKey)} alt={`דיוקן של ${save.character.name}`} className="aspect-[4/5] w-full object-cover" />
+      <div className="relative aspect-[4/5] overflow-hidden border border-[#c6a15b]/45 bg-black/35">
+        <CharacterPortrait portraitKey={save.character.portraitKey} alt={`דיוקן של ${save.character.name}`} sizes="256px" className="object-cover" />
       </div>
       <h3 className="display-font mt-3 text-3xl text-[#f0cf82]">{save.character.name}</h3>
       <p className="text-[#a89f91]">{race.name} · {characterClass.name} · {background.name}</p>

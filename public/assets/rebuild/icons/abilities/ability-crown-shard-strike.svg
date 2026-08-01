@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="רסיס כתר מאגי">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="68%"><stop stop-color="#173e4b"/><stop offset=".62" stop-color="#101720"/><stop offset="1" stop-color="#05070a"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff0a8"/><stop offset=".45" stop-color="#d1a64d"/><stop offset="1" stop-color="#6f4318"/></linearGradient>
+    <linearGradient id="ice" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d7fbff"/><stop offset=".4" stop-color="#4dd4ef"/><stop offset="1" stop-color="#17647d"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="256" height="256" rx="28" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="96" fill="none" stroke="#d4b466" stroke-opacity=".18" stroke-width="2"/>
+  <path d="M49 177 95 58l31 44 36-54 42 129-76 35Z" fill="#51d8f4" opacity=".22" filter="url(#glow)"/>
+  <path d="m70 166 31-81 25 35 31-47 28 91-57 28Z" fill="url(#ice)" stroke="#c8f7ff" stroke-width="3"/>
+  <path d="m65 64 28 20 35-39 34 39 29-20-11 54-52-17-52 17Z" fill="url(#gold)" stroke="#ffe591" stroke-width="3"/>
+  <path d="m128 109 12 31-12 35-12-35Z" fill="#f6ffff" filter="url(#glow)"/>
+  <path d="M48 204h160" stroke="#d1a64d" stroke-opacity=".45" stroke-width="3"/>
+</svg>

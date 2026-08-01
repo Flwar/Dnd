@@ -74,6 +74,18 @@ export const abilities: Ability[] = [
     animationKey: "fear-wave", soundKey: "intimidating-roar", statusEffects: [{ statusId: "frightened", duration: 2, chance: 0.85 }], availability: { kind: "always" }, logText: "שאגתו של {actor} מרעידה את האולם."
   },
   {
+    id: "king-crown-shard-strike", classId: "king", name: "מכת רסיס הכתר", description: "הכתר משלח להב אור־ערפל שפוגע באויב ומסמן פרצה בהגנתו.", iconAssetKey: "ability-crown-shard-strike", cost: 0, cooldown: 0, target: "enemy",
+    formula: { diceCount: 1, diceSides: 10, flatBonus: 3, attribute: "charisma", damageType: "arcane" }, animationKey: "crown-shard-lance", soundKey: "magic-cast", statusEffects: [{ statusId: "marked", duration: 2, chance: 0.5 }], availability: { kind: "always" }, logText: "רסיס מן הכתר בוער מעל {actor} וננעץ ב־{target}."
+  },
+  {
+    id: "king-royal-decree", classId: "king", name: "צו מלכותי", description: "פקודה ריבונית מכבידה על לבם של כל האויבים ומחלישה את דיוקם.", iconAssetKey: "ability-royal-decree", cost: 3, cooldown: 3, target: "all-enemies",
+    animationKey: "royal-command-wave", soundKey: "intimidating-roar", statusEffects: [{ statusId: "frightened", duration: 2, chance: 1 }], availability: { kind: "always" }, logText: "קולו של {actor} מהדהד כצו שאין להמרות."
+  },
+  {
+    id: "king-sovereign-aegis", classId: "king", name: "חסות הריבון", description: "אור הכתר מרפא בעל ברית ומקים סביבו מגן מלכותי.", iconAssetKey: "ability-sovereign-aegis", cost: 4, cooldown: 3, target: "ally",
+    healingFormula: { diceCount: 1, diceSides: 8, flatBonus: 5, attribute: "charisma" }, animationKey: "sovereign-aegis", soundKey: "healing", statusEffects: [{ statusId: "faith-shield", duration: 3, chance: 1 }], availability: { kind: "always" }, logText: "הכתר מאיר, ופצעיו של {target} נסגרים מאחורי מגן זהב."
+  },
+  {
     id: "enemy-corrupted-bite", classId: "rogue", name: "נשיכה מושחתת", description: "ניבים שחורים ננעצים בבשר ומותירים זיהום.", iconAssetKey: "ability-corrupted-bite", cost: 0, cooldown: 0, target: "enemy",
     formula: { diceCount: 1, diceSides: 6, flatBonus: 1, attribute: "dexterity", damageType: "piercing" }, animationKey: "creature-lunge", soundKey: "bite-impact", statusEffects: [{ statusId: "corrupted", duration: 2, chance: 0.3 }], availability: { kind: "always" }, logText: "היצור מזנק בנשיכה פראית."
   },

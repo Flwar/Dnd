@@ -111,6 +111,7 @@ export function classStartingInventory(
 ): InventoryEntry[] {
   const itemIds = [characterClass.startingWeaponId, background.startingItemId];
   if (characterClass.startingArmorId) itemIds.push(characterClass.startingArmorId);
+  itemIds.push(...(characterClass.startingItemIds ?? []));
   return [...new Set(itemIds)].map((itemId, index) => ({
     id: `starting-${index + 1}-${itemId}`,
     itemId,
@@ -142,6 +143,7 @@ export function primaryAttributeForClass(classId: ClassId): keyof Attributes {
     ranger: "dexterity",
     cleric: "wisdom",
     barbarian: "strength",
+    king: "charisma",
   };
   return map[classId];
 }

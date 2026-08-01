@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   Check,
@@ -21,8 +20,8 @@ import {
   WifiOff,
 } from "lucide-react";
 import { GameButton } from "@/components/ui/GameButton";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { classesById } from "@/content/classes";
-import { getPartyPortraitPath } from "@/lib/party/assets";
 import type {
   PartyConnectionState,
   PartyLobbySnapshot,
@@ -151,7 +150,7 @@ export function PartyRoomPanel({
               return (
                 <li key={member.characterId} className={`grid gap-3 border p-3 sm:grid-cols-[4.5rem_1fr_auto] sm:items-center ${memberIsMe ? "border-[#c6a15b]/55 bg-[#c6a15b]/8" : "border-white/10 bg-black/20"}`}>
                   <div className="relative aspect-square overflow-hidden bg-[#101318]">
-                    <Image src={getPartyPortraitPath(member.portraitKey)} alt={`דיוקן הדמות ${member.characterName}`} fill sizes="72px" className="object-cover object-[center_28%]" />
+                    <CharacterPortrait portraitKey={member.portraitKey} alt={`דיוקן הדמות ${member.characterName}`} sizes="72px" className="object-cover object-[center_28%]" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

@@ -125,6 +125,34 @@ describe("מנוע תורות", () => {
     expect(result.state.combatants[player.id].currentResource).toBe(player.currentResource - 2);
   });
 
+  it("צו מלכותי מחליש את כל האויבים בפעולה אחת", () => {
+    const king = makeCombatant({
+      id: "king-one",
+      name: "המלך",
+      resourceType: "authority",
+      maximumResource: 10,
+      currentResource: 10,
+      initiativeBonus: 30,
+      abilityIds: ["king-crown-shard-strike", "king-royal-decree", "king-sovereign-aegis"],
+    });
+    const firstEnemy = makeCombatant({ id: "enemy-one", kind: "enemy", name: "שרץ ראשון", initiativeBonus: -20 });
+    const secondEnemy = makeCombatant({ id: "enemy-two", kind: "enemy", name: "שרץ שני", initiativeBonus: -20 });
+    const state = createCombatState("royal-test", [king, firstEnemy, secondEnemy], 91);
+    const result = submitCombatAction(
+      state,
+      king.id,
+      { kind: "ability", abilityId: "king-royal-decree", targetIds: [firstEnemy.id, secondEnemy.id] },
+      "royal-command",
+      { abilities: abilitiesById, statuses: statusesById },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.combatants[firstEnemy.id].statuses.some((status) => status.statusId === "frightened")).toBe(true);
+    expect(result.state.combatants[secondEnemy.id].statuses.some((status) => status.statusId === "frightened")).toBe(true);
+    expect(result.state.combatants[king.id].currentResource).toBe(7);
+  });
+
   it("הבוס מסמן מכה כבדה לפני שחרורה", () => {
     const player = makeCombatant();
     const boss = makeCombatant({

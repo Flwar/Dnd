@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, CloudOff, Crown, LogIn, Settings, UserPlus } from "lucide-react";
+import { BookOpen, CloudOff, Crown, LogIn, Settings, Sparkles, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
 import { Atmosphere } from "@/components/shell/Atmosphere";
 import { GameButton } from "@/components/ui/GameButton";
 import { Modal } from "@/components/ui/Modal";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { ReleaseNotesPanel } from "@/components/menu/ReleaseNotesPanel";
+import { releaseVersionLabel } from "@/content/releases";
 import { audioManager } from "@/lib/audio/audio-manager";
 import { getAssetPath } from "@/lib/assets/manifest";
 
 export function OpeningMenu({ cloudConfigured }: { cloudConfigured: boolean }) {
   const router = useRouter();
-  const [dialog, setDialog] = useState<"settings" | "about" | null>(null);
+  const [dialog, setDialog] = useState<"settings" | "about" | "release" | null>(null);
 
   useEffect(() => {
     const unlock = () => { void audioManager.setAmbience("menu"); };
@@ -22,7 +24,7 @@ export function OpeningMenu({ cloudConfigured }: { cloudConfigured: boolean }) {
     return () => {
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
-      audioManager.stopAmbience();
+      audioManager.stopAmbience("menu");
     };
   }, []);
 
@@ -39,7 +41,7 @@ export function OpeningMenu({ cloudConfigured }: { cloudConfigured: boolean }) {
           <Crown className="size-7" aria-hidden="true" />
           <span className="text-sm font-bold tracking-[0.26em]">אגדה חדשה בארצות ואלדר</span>
         </div>
-        <h1 className="display-font text-6xl leading-[0.9] text-[#f0cf82] drop-shadow-[0_4px_18px_rgba(0,0,0,.9)] sm:text-7xl lg:text-8xl">הכתר<br />המנופץ</h1>
+        <h1 className="living-title display-font text-6xl leading-[0.9] text-[#f0cf82] drop-shadow-[0_4px_18px_rgba(0,0,0,.9)] sm:text-7xl lg:text-8xl">הכתר<br />המנופץ</h1>
         <p className="mt-5 max-w-lg text-lg leading-8 text-[#d3cabb] sm:text-xl">שבעה רסיסים מתעוררים. הערפל לוחש בשמך. הבחירה הראשונה עדיין בידיך.</p>
         <div className="ornament-rule my-7 max-w-md" aria-hidden="true">◆</div>
 
@@ -67,12 +69,16 @@ export function OpeningMenu({ cloudConfigured }: { cloudConfigured: boolean }) {
             <GameButton variant="ghost" onClick={() => setDialog("about")}><BookOpen className="size-5" aria-hidden="true" />על העולם</GameButton>
             <GameButton variant="ghost" onClick={() => setDialog("settings")}><Settings className="size-5" aria-hidden="true" />הגדרות</GameButton>
           </div>
+          <GameButton variant="ghost" onClick={() => setDialog("release")}><Sparkles className="size-5 text-[#62c6df]" aria-hidden="true" />מה חדש · <span>{releaseVersionLabel}</span></GameButton>
         </nav>
         <p className="mt-7 text-xs text-[#817a70]">פרק ראשון — הצללים שמתחת לערפלון</p>
       </motion.section>
 
       <Modal open={dialog === "settings"} title="הגדרות" onClose={() => setDialog(null)}>
         <SettingsPanel />
+      </Modal>
+      <Modal open={dialog === "release"} title="מה חדש במשחק" onClose={() => setDialog(null)}>
+        <ReleaseNotesPanel />
       </Modal>
       <Modal open={dialog === "about"} title="האגדה על הכתר" onClose={() => setDialog(null)}>
         <div className="space-y-5 text-lg leading-8 text-[#d3cabb]">

@@ -25,12 +25,33 @@ export type ProfileRow = {
   id: string;
   display_name: string;
   avatar_key: string;
+  account_role: "player" | "administrator";
+  account_title: string | null;
+  is_king: boolean;
   created_at: string;
   updated_at: string;
   last_active_at: string;
   total_playtime_seconds: number;
   highest_character_level: number;
   completed_chapter_count: number;
+};
+
+export type PlayerPresenceConnectionRow = {
+  connection_id: string;
+  user_id: string;
+  connected_at: string;
+  last_seen_at: string;
+};
+
+export type PlayerPresenceEventRow = {
+  id: number;
+  user_id: string;
+  event_type: "joined" | "left";
+  display_name: string;
+  avatar_key: string;
+  account_title: string | null;
+  is_king: boolean;
+  created_at: string;
 };
 
 export type CharacterRow = {
@@ -372,6 +393,17 @@ export type Database = {
           "idempotency_key" | "character_id" | "reward_key" | "scope_key"
         >
       >;
+      player_presence_connections: TableDefinition<
+        PlayerPresenceConnectionRow,
+        InsertShape<PlayerPresenceConnectionRow, "connection_id" | "user_id">
+      >;
+      player_presence_events: TableDefinition<
+        PlayerPresenceEventRow,
+        InsertShape<
+          PlayerPresenceEventRow,
+          "user_id" | "event_type" | "display_name" | "avatar_key"
+        >
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -465,6 +497,34 @@ export type Database = {
           p_character_id: string;
           p_reward_key: string;
           p_scope_key: string;
+        };
+        Returns: Json;
+      };
+      heartbeat_player_presence: {
+        Args: { p_connection_id: string };
+        Returns: Json;
+      };
+      disconnect_player_presence: {
+        Args: { p_connection_id: string };
+        Returns: Json;
+      };
+      get_online_players: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          user_id: string;
+          display_name: string;
+          avatar_key: string;
+          account_title: string | null;
+          is_king: boolean;
+          connection_count: number;
+          last_seen_at: string;
+        }[];
+      };
+      provision_account_access: {
+        Args: {
+          p_user_id: string;
+          p_account_role: "player" | "administrator";
+          p_is_king?: boolean;
         };
         Returns: Json;
       };

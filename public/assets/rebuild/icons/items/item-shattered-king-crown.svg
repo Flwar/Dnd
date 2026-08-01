@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="כתר המלך המנופץ">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="72%"><stop stop-color="#173e49"/><stop offset=".56" stop-color="#16151a"/><stop offset="1" stop-color="#050608"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff2a7"/><stop offset=".35" stop-color="#d6aa4d"/><stop offset=".72" stop-color="#8b5a22"/><stop offset="1" stop-color="#39200d"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="256" height="256" rx="28" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="98" fill="none" stroke="#d6ae59" stroke-opacity=".2" stroke-width="2"/>
+  <path d="m43 77 42 35 39-68 18 63 28-50 43 20-21 109H64Z" fill="url(#gold)" stroke="#ffe79b" stroke-width="4"/>
+  <path d="M65 159h127l-6 34H71Z" fill="#6e3c17" stroke="#dcb45c" stroke-width="4"/>
+  <path d="M82 169h92" stroke="#f2d276" stroke-width="5" stroke-linecap="round"/>
+  <path d="m128 105 14 25-14 29-14-29Z" fill="#bcf5ff" stroke="#f2ffff" stroke-width="2" filter="url(#glow)"/>
+  <path d="m80 115 9 17-9 18-9-18Zm96-1 9 18-9 18-9-18Z" fill="#4fd8f1" filter="url(#glow)"/>
+  <path d="M129 44v58M120 60l18 16M139 55l-19 24" stroke="#78e8f7" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+</svg>

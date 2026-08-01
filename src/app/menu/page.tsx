@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "התפריט הראשי" };
 export default async function MenuPage() {
   const { supabase, user } = await requireUser("/menu");
   const [profileResult, characterResult] = await Promise.all([
-    supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("display_name,account_title,is_king,account_role").eq("id", user.id).maybeSingle(),
     supabase.from("characters").select("id,name,class_id,portrait_key,level,current_location_id,chapter_id,last_played_at").eq("is_active", true).order("last_played_at", { ascending: false }),
   ]);
   const rows = characterResult.data ?? [];
@@ -34,5 +34,6 @@ export default async function MenuPage() {
     };
   });
   const fallbackName = (user.user_metadata.display_name as string | undefined) ?? user.email?.split("@")[0] ?? "נודד";
-  return <MainMenuClient displayName={profileResult.data?.display_name ?? fallbackName} characters={characters} />;
+  const isKing = profileResult.data?.account_role === "administrator" && profileResult.data.is_king === true;
+  return <MainMenuClient displayName={profileResult.data?.display_name ?? fallbackName} characters={characters} accountTitle={profileResult.data?.account_title ?? null} isKing={isKing} />;
 }

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { GameButton } from "@/components/ui/GameButton";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { evaluateCondition } from "@/game/dialogue";
 import { locationsById } from "@/content/locations";
 import { questsById } from "@/content/quests";
@@ -33,6 +34,7 @@ const resourceLabels = {
   focus: "מיקוד",
   faith: "אמונה",
   rage: "זעם",
+  authority: "סמכות",
 };
 
 const saveLabels = {
@@ -43,6 +45,8 @@ const saveLabels = {
   conflict: "נמצאה שמירה חדשה יותר",
   error: "השמירה נכשלה",
 };
+
+const mineLocationIds = new Set(["mine-entrance", "main-tunnel", "abandoned-tool-store", "flooded-passage", "pillar-hall", "hidden-chamber", "guardian-sanctum", "shard-sanctum"]);
 
 export function GameScene({
   save,
@@ -62,6 +66,7 @@ export function GameScene({
   onReturnToMenu: () => void;
 }) {
   const location = locationsById[save.story.currentLocationId] ?? locationsById["village-gate"];
+  const isMineLocation = mineLocationIds.has(location.id);
   const characterClass = classesById[save.character.classId];
   const context = { character: save.character, story: save.story, inventory: save.inventory, quests: save.quests };
   const interactions = location.interactions.filter((interaction) =>
@@ -74,26 +79,39 @@ export function GameScene({
   const visibleObjectives = activeQuest?.objectives.filter((objective) => activeQuestState?.objectives[objective.id] !== "hidden") ?? [];
 
   useEffect(() => {
-    const mineIds = ["mine-entrance", "main-tunnel", "abandoned-tool-store", "flooded-passage", "pillar-hall", "hidden-chamber", "guardian-sanctum"];
-    void audioManager.setAmbience(mineIds.includes(location.id) ? "mine" : "village").catch(() => undefined);
-    return () => audioManager.stopAmbience();
+    const ambience = mineLocationIds.has(location.id) ? "mine" : "village";
+    void audioManager.setAmbience(ambience).catch(() => undefined);
+    return () => audioManager.stopAmbience(ambience);
   }, [location.id]);
 
   return (
     <main id="main-content" className="relative min-h-dvh overflow-x-hidden bg-[#07090b] pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:h-dvh lg:overflow-hidden lg:pb-0">
-      <picture className="absolute inset-0">
+      <picture key={location.id} className="scene-parallax absolute inset-0">
         <source media="(max-width: 760px)" srcSet={getAssetPath(`${location.backgroundAssetKey}-mobile`)} />
-        <img key={location.backgroundAssetKey} src={getAssetPath(location.backgroundAssetKey)} alt={location.description} className="size-full object-cover" />
+        <img src={getAssetPath(location.backgroundAssetKey)} alt={location.description} className="scene-parallax-image size-full object-cover" />
       </picture>
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,6,8,.2),rgba(4,6,8,.48)_48%,rgba(4,6,8,.96)_100%),radial-gradient(circle_at_center,transparent_25%,rgba(0,0,0,.62)_100%)]" />
       <div className="animate-fog pointer-events-none absolute inset-x-[-10%] bottom-[28%] h-44 bg-[radial-gradient(ellipse,rgba(154,188,197,.14),transparent_68%)] blur-2xl" />
+      <div className={`scene-particles pointer-events-none absolute inset-0 ${isMineLocation ? "scene-particles--mine" : "scene-particles--village"}`} aria-hidden="true">
+        {Array.from({ length: 10 }, (_, index) => (
+          <span
+            key={index}
+            style={{
+              insetInlineStart: `${7 + ((index * 19) % 88)}%`,
+              insetBlockStart: `${18 + ((index * 23) % 70)}%`,
+              animationDelay: `${index * -0.73}s`,
+              animationDuration: `${5.5 + (index % 5) * 1.2}s`,
+            }}
+          />
+        ))}
+      </div>
+      {isMineLocation ? <div className="scene-rune-light pointer-events-none absolute inset-x-[18%] top-[8%] h-[38%]" aria-hidden="true" /> : <div className="scene-torch-light pointer-events-none absolute bottom-[16%] end-[8%] size-72" aria-hidden="true" />}
 
       <header className="safe-inline-area relative z-20 border-b border-[#c6a15b]/22 bg-black/72 py-2 [--safe-inline-padding:.75rem] backdrop-blur-md sm:[--safe-inline-padding:1.25rem]">
         <div className="mx-auto flex max-w-[110rem] items-center gap-3">
           <button className="group flex min-w-0 flex-1 items-center gap-3 text-right" onClick={() => onOpenPanel("character")} aria-label="פתיחת דף הדמות">
-            <div className="size-11 shrink-0 overflow-hidden rounded-full border border-[#c6a15b]/60">
-              {/* eslint-disable-next-line @next/next/no-img-element -- generated local portrait */}
-              <img src={getAssetPath(save.character.portraitKey)} alt="" className="size-full object-cover" />
+            <div className="relative size-11 shrink-0 overflow-hidden rounded-full border border-[#c6a15b]/60">
+              <CharacterPortrait portraitKey={save.character.portraitKey} alt="" sizes="44px" className="object-cover" />
             </div>
             <div className="min-w-0 sm:w-56">
               <div className="mb-1 flex items-center gap-2"><b className="truncate text-[#f2e7d3]">{save.character.name}</b><span className="text-xs text-[#c6a15b]">דרגה <bdi>{save.character.level}</bdi></span></div>

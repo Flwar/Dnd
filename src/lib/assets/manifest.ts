@@ -23,12 +23,12 @@ const backgroundNames = [
 ] as const;
 
 export const racePortraitKeys = [
-  "portrait-human-01", "portrait-human-02", "portrait-human-03", "portrait-human-04",
-  "portrait-elf-01", "portrait-elf-02", "portrait-elf-03", "portrait-elf-04",
-  "portrait-dwarf-01", "portrait-dwarf-02", "portrait-dwarf-03", "portrait-dwarf-04",
-  "portrait-halfling-01", "portrait-halfling-02", "portrait-halfling-03", "portrait-halfling-04",
-  "portrait-orc-01", "portrait-orc-02", "portrait-orc-03", "portrait-orc-04",
-  "portrait-dragonborn-01", "portrait-dragonborn-02", "portrait-dragonborn-03", "portrait-dragonborn-04",
+  "portrait-human-01", "portrait-human-02", "portrait-human-03", "portrait-human-04", "portrait-human-05",
+  "portrait-elf-01", "portrait-elf-02", "portrait-elf-03", "portrait-elf-04", "portrait-elf-05",
+  "portrait-dwarf-01", "portrait-dwarf-02", "portrait-dwarf-03", "portrait-dwarf-04", "portrait-dwarf-05",
+  "portrait-halfling-01", "portrait-halfling-02", "portrait-halfling-03", "portrait-halfling-04", "portrait-halfling-05",
+  "portrait-orc-01", "portrait-orc-02", "portrait-orc-03", "portrait-orc-04", "portrait-orc-05",
+  "portrait-dragonborn-01", "portrait-dragonborn-02", "portrait-dragonborn-03", "portrait-dragonborn-04", "portrait-dragonborn-05",
 ] as const;
 
 const npcPortraitKeys = [
@@ -78,6 +78,10 @@ export const assetManifest: AssetManifestEntry[] = [
   ...npcPortraitKeys.map((key) => generated(key, `${ROOT}/portraits/${key}.webp`, "portrait")),
   ...abilityKeys.map((key) => generated(key, `${ROOT}/icons/abilities/${key}.webp`, "ability")),
   ...itemKeys.map((key) => generated(key, `${ROOT}/icons/items/${key}.webp`, "item")),
+  generated("ability-crown-shard-strike", `${ROOT}/icons/abilities/ability-crown-shard-strike.svg`, "ability"),
+  generated("ability-royal-decree", `${ROOT}/icons/abilities/ability-royal-decree.svg`, "ability"),
+  generated("ability-sovereign-aegis", `${ROOT}/icons/abilities/ability-sovereign-aegis.svg`, "ability"),
+  generated("item-shattered-king-crown", `${ROOT}/icons/items/item-shattered-king-crown.svg`, "item"),
 ];
 
 export const assetManifestByKey = Object.fromEntries(

@@ -119,6 +119,24 @@ function makeProps(overrides: Partial<CombatUIProps> = {}): CombatUIProps {
 }
 
 describe("ממשק הקרב", () => {
+  it("משתלט מיד על כל חלון המשחק, נועל גלילת רקע ומשאיר את הפעולות באזור תחתון קבוע", () => {
+    const previousOverflow = document.body.style.overflow;
+    const { unmount } = render(createElement(CombatUI, makeProps()));
+
+    const combatScreen = screen.getByTestId("combat-screen");
+    expect(combatScreen).toHaveClass("fixed", "inset-0", "h-dvh", "overflow-hidden");
+    expect(combatScreen).toHaveAttribute("data-locks-exploration", "true");
+    expect(combatScreen).toHaveFocus();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    const actionRegion = screen.getByTestId("combat-action-region");
+    expect(actionRegion).toHaveClass("shrink-0", "overflow-y-auto", "overscroll-contain");
+    expect(screen.getByTestId("combat-battlefield-scroll-region")).toHaveClass("overflow-y-auto", "overscroll-contain");
+
+    unmount();
+    expect(document.body.style.overflow).toBe(previousOverflow);
+  });
+
   it("מציג סדר תורות, מדדים, מטרה, כוונת אויב, רמזים ושלוש יכולות", () => {
     render(createElement(CombatUI, makeProps()));
 

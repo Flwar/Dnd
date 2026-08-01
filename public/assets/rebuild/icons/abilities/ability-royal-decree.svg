@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="צו מלכותי">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%"><stop stop-color="#4a271c"/><stop offset=".6" stop-color="#171216"/><stop offset="1" stop-color="#050608"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1ae"/><stop offset=".5" stop-color="#c8943b"/><stop offset="1" stop-color="#684017"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="256" height="256" rx="28" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="96" fill="none" stroke="#e2bb65" stroke-opacity=".2" stroke-width="2"/>
+  <path d="M43 70h70l15 18 15-18h70l-22 38 22 38h-70l-15 18-15-18H43l22-38Z" fill="#d59b3d" opacity=".12"/>
+  <path d="M78 68h100v120H78z" fill="#d6b272" stroke="#ffefb6" stroke-width="3"/>
+  <path d="M89 80h78v96H89z" fill="#2a1714"/>
+  <path d="m99 119 15 12 27-31 16 13-42 48-31-27Z" fill="url(#gold)" filter="url(#glow)"/>
+  <path d="m93 62 14 12 21-24 21 24 14-12-6 35-29-10-29 10Z" fill="url(#gold)" stroke="#ffe7a0" stroke-width="2"/>
+  <path d="M49 199h158M60 214h136" stroke="#d7a64c" stroke-linecap="round" stroke-opacity=".55" stroke-width="4"/>
+</svg>

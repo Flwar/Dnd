@@ -11,5 +11,11 @@ export default async function NewCharacterPage() {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect("/auth/login");
-  return <CharacterCreator />;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("account_role,is_king")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  const isKing = profile?.account_role === "administrator" && profile.is_king === true;
+  return <CharacterCreator isKing={isKing} />;
 }

@@ -1,9 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { Check, Heart, Shield } from "lucide-react";
 import { motion } from "framer-motion";
-import { getPartyPortraitPath } from "@/lib/party/assets";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import type { PartyCharacterOption } from "@/lib/party/types";
 
 type Props = {
@@ -41,10 +40,9 @@ export function PartyCharacterPicker({ characters, selectedCharacterId, disabled
               }`}
             >
               <span className="relative block h-full min-h-28 overflow-hidden bg-[#101318]">
-                <Image
-                  src={getPartyPortraitPath(character.portraitKey)}
+                <CharacterPortrait
+                  portraitKey={character.portraitKey}
                   alt={`דיוקן הדמות ${character.name}`}
-                  fill
                   sizes="80px"
                   className="object-cover object-[center_28%]"
                 />

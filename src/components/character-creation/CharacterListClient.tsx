@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Clock3, MapPin, Plus, Shield, Swords } from "lucide-react";
 import { motion } from "framer-motion";
-import { getAssetPath } from "@/lib/assets/manifest";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { GameButton } from "@/components/ui/GameButton";
 
 export type CharacterListEntry = {
@@ -37,7 +36,7 @@ export function CharacterListClient({ characters, chooseMode }: { characters: Ch
             {characters.map((character, index) => (
               <motion.article key={character.id} className="stone-panel overflow-hidden" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
                 <div className="relative aspect-[16/10] overflow-hidden bg-[#101318]">
-                  <Image src={getAssetPath(character.portraitKey)} alt={`דיוקן הדמות ${character.name}`} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover object-[center_30%]" />
+                  <CharacterPortrait portraitKey={character.portraitKey} alt={`דיוקן הדמות ${character.name}`} sizes="(max-width: 640px) 100vw, 33vw" className="object-cover object-[center_30%]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#111318] via-transparent to-transparent" />
                   <span className="absolute bottom-3 end-3 border border-[#c6a15b]/50 bg-black/70 px-3 py-1 text-sm text-[#f0cf82]">דרגה <bdi className="ltr-isolate">{character.level}</bdi></span>
                 </div>

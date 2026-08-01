@@ -80,4 +80,20 @@ describe("יצירת דמות", () => {
     );
     expect(new Set(inventory.map((entry) => entry.itemId)).size).toBe(inventory.length);
   });
+
+  it("מעניק למלך סמכות, יכולות ייחודיות וכתר התחלתי", () => {
+    const king = characterClasses.find((entry) => entry.id === "king")!;
+    const background = characterBackgrounds.find((entry) => entry.id === "fallen-noble")!;
+    const stats = deriveStats(validAttributes, king);
+    const inventory = classStartingInventory(king, background, now);
+
+    expect(king.resourceType).toBe("authority");
+    expect(king.startingAbilityIds).toEqual([
+      "king-crown-shard-strike",
+      "king-royal-decree",
+      "king-sovereign-aegis",
+    ]);
+    expect(stats.maximumPrimaryResource).toBeGreaterThanOrEqual(king.startingResource);
+    expect(inventory.map((entry) => entry.itemId)).toContain("crown-of-the-shattered-king");
+  });
 });

@@ -21,6 +21,11 @@ export function SettingsPanel() {
         <span className="flex items-center justify-between"><b>עוצמת אפקטים</b><bdi className="ltr-isolate">{Math.round(settings.effectsVolume * 100)}%</bdi></span>
         <input className="w-full accent-[#c6a15b]" type="range" min="0" max="1" step="0.05" value={settings.effectsVolume} onChange={(event) => settings.setEffectsVolume(Number(event.target.value))} />
       </label>
+      <label className="space-y-3">
+        <span className="flex items-center justify-between"><b>עוצמת דיבור</b><bdi className="ltr-isolate">{Math.round(settings.voiceVolume * 100)}%</bdi></span>
+        <input className="w-full accent-[#62c6df]" type="range" min="0" max="1" step="0.05" value={settings.voiceVolume} onChange={(event) => settings.setVoiceVolume(Number(event.target.value))} />
+      </label>
+      <Toggle label="קולות לדמויות" description="מאפשר להשמיע טקסט באמצעות קול עברי הזמין במכשיר." checked={settings.voicesEnabled} onChange={settings.setVoicesEnabled} />
       <div>
         <p className="mb-3 font-bold">גודל הכתב</p>
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="גודל הכתב">
@@ -31,7 +36,7 @@ export function SettingsPanel() {
           ))}
         </div>
       </div>
-      <div className="grid gap-3">
+      <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
         <Toggle label="הפחתת תנועה" description="מצמצם אנימציות ואפקטים סביבתיים." checked={settings.reducedMotion} onChange={settings.setReducedMotion} />
         <Toggle label="ניגודיות גבוהה" description="מחזק גבולות, טקסט ומצבי מיקוד." checked={settings.highContrast} onChange={settings.setHighContrast} />
       </div>

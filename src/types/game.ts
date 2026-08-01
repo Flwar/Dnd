@@ -40,7 +40,7 @@ export interface DerivedStats {
   carryCapacity: number;
 }
 
-export type ResourceType = "stamina" | "mana" | "focus" | "faith" | "rage";
+export type ResourceType = "stamina" | "mana" | "focus" | "faith" | "rage" | "authority";
 export type DamageType =
   | "physical"
   | "piercing"
@@ -52,7 +52,7 @@ export type DamageType =
   | "corruption";
 
 export type RaceId = "human" | "elf" | "dwarf" | "halfling" | "orc" | "dragonborn";
-export type ClassId = "fighter" | "mage" | "rogue" | "ranger" | "cleric" | "barbarian";
+export type ClassId = "fighter" | "mage" | "rogue" | "ranger" | "cleric" | "barbarian" | "king";
 export type BackgroundId =
   | "former-soldier"
   | "wandering-scholar"
@@ -83,6 +83,7 @@ export interface CharacterClass {
   startingResource: number;
   startingWeaponId: string;
   startingArmorId?: string;
+  startingItemIds?: string[];
   startingAbilityIds: [string, string, string];
   strengths: string[];
   weaknesses: string[];
@@ -110,6 +111,9 @@ export interface Profile {
   totalPlaytimeSeconds: number;
   highestCharacterLevel: number;
   completedChapterCount: number;
+  accountRole: "player" | "administrator";
+  accountTitle: string | null;
+  isKing: boolean;
 }
 
 export interface PlayerCharacter {

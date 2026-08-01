@@ -28,7 +28,7 @@ describe("שלמות תוכן הפרק", () => {
       "אדם", "אלף", "גמד", "בן מחצית", "אורק", "בן דרקון",
     ]);
     expect(characterClasses.map((entry) => entry.name)).toEqual([
-      "לוחם", "קוסם", "נוכל", "סייר", "כוהן", "ברברי",
+      "לוחם", "קוסם", "נוכל", "סייר", "כוהן", "ברברי", "מלך",
     ]);
     expect(characterBackgrounds).toHaveLength(7);
     expect(Object.keys(backgroundsById)).toHaveLength(7);
