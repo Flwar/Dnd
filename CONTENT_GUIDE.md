@@ -84,6 +84,8 @@ The canonical production manifest is `src/lib/assets/manifest.ts`. Runtime conte
 6. Add provenance, creator/source, license, attribution, and modifications to `ASSET_CREDITS.md`.
 7. Use `getAssetPath("asset-key")`; do not hardcode a remote URL.
 
+Production raster optimization uses Sharp with `effort: 6` and `smartSubsample: true`. Resize wide backgrounds to `1024×576` at WebP quality 55, mobile backgrounds to `576×720` at quality 55, portraits to `288×360` at quality 62, and square item/ability art to `160×160` at quality 70. Keep the social preview at `1200×630`. Write optimized files to a separate directory first, compare representative dark and high-detail scenes at their actual UI size, then replace the repository copies only after the full manifest remains complete. Finish by running `npm run test:unit`, `npm run build`, and the desktop/mobile browser smoke tests; lossy recompression must not be applied repeatedly to already optimized files.
+
 Locally hosted fonts and code-rendered icon libraries are assets too. Record their exact package or file path, upstream project, license, required notice, and modifications in `ASSET_CREDITS.md`, even though they do not belong in the scene-art manifest.
 
 Example keys:
