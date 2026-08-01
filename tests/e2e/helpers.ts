@@ -19,7 +19,7 @@ export async function signIn(page: Page, credentials: Credentials): Promise<void
   await expect(page.getByRole("heading", { name: "ברוכים השבים" })).toBeVisible();
 
   await page.getByLabel("כתובת אימייל").fill(credentials.email);
-  await page.getByLabel("סיסמה").fill(credentials.password);
+  await page.locator('input[name="password"]').fill(credentials.password);
   await page.getByRole("button", { name: "התחברות", exact: true }).click();
 
   await expect(page).toHaveURL(/\/menu(?:\?|$)/, { timeout: 30_000 });
