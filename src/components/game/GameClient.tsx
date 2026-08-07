@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { usePartyGame } from "@/hooks/use-party-game";
 import { DiceOverlay } from "@/components/game/DiceOverlay";
 import { GameNotifications } from "@/components/game/GameNotifications";
@@ -536,6 +537,10 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
 
   const handleInteraction = useCallback((interaction: LocationInteraction) => {
     if (onlineParty) {
+      if (interaction.encounterId && !isPartyLeader) {
+        notify("party", "ממתינים למוביל החבורה", "רק המוביל יכול לפתוח קרב משותף. כל חברי החבורה ייכנסו לקרב יחד.");
+        return;
+      }
       void (async () => {
         if (interaction.oneTime && saveRef.current.story.flags[`interaction_${interaction.id}_completed`]) return;
         let shouldSkipEncounter = false;
@@ -611,7 +616,7 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     if (startEncounter) startEncounter();
     else void commit(next, interaction.dialogueNodeId ? "dialogue-opened" : "interaction-completed");
     announceSkippedAmbush?.();
-  }, [applyEffects, beginEncounter, commit, notify, onlineParty, openDialogue, partyGame, replaceSave, setDice]);
+  }, [applyEffects, beginEncounter, commit, isPartyLeader, notify, onlineParty, openDialogue, partyGame, replaceSave, setDice]);
 
   const applyResolvedDialogueChoice = useCallback((choice: DialogueChoice, nodeId: string, authoritativeRoll?: DiceResult) => {
     const node = dialoguesById[nodeId];
@@ -1020,7 +1025,7 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     /> : null;
 
   const explorationScreen = <>
-    <GameScene save={save} saveStatus={saveStatus} onInteraction={handleInteraction} onTravel={handleTravel} onOpenPanel={setActivePanel} onManualSave={() => void commit(saveRef.current, "manual-save")} onReturnToMenu={() => void returnToMenu()} />
+    <GameScene save={save} saveStatus={saveStatus} onInteraction={handleInteraction} onTravel={handleTravel} onOpenPanel={setActivePanel} onManualSave={() => void commit(saveRef.current, "manual-save")} onReturnToMenu={() => void returnToMenu()} travelLockedMessage={onlineParty && !isPartyLeader ? "ממתינים למוביל החבורה כדי לעבור למקום הבא." : undefined} />
     <DialoguePanel nodeId={dialogueNodeId} save={save} onChoice={handleDialogueChoice} onClose={() => setDialogueNodeId(null)} />
     <GamePanels panel={activePanel} save={save} onClose={() => setActivePanel(null)} onEquip={handleEquip} onUnequip={handleUnequip} onUse={handleUseItem} onDrop={handleDrop} onBuy={handleBuy} />
     <OpeningCinematic open={cinematicOpen} onFinish={finishCinematic} />
@@ -1037,6 +1042,12 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
         const decision = partyGame.voteState.decisions.find((candidate) => candidate.decisionId === dialogueNodeId);
         return decision ? <span className="mt-1 block">הצבעות: <bdi>{decision.totalVotes}/{decision.requiredVotes}</bdi>{decision.resolvedChoiceId ? " · ההחלטה הוכרעה" : ""}</span> : null;
       })() : null}
+      <Link
+        href={`/party?character=${encodeURIComponent(save.character.id)}`}
+        className="mt-2 inline-flex min-h-9 items-center border border-[#62c6df]/35 px-2 font-semibold text-[#d8f7ff] hover:border-[#f0cf82] hover:text-[#fff0c4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f0cf82]"
+      >
+        ניהול החבורה ויציאה
+      </Link>
     </div> : null}
   </>;
 

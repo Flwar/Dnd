@@ -7,13 +7,16 @@ const authenticationPrefixes = ["/auth/login", "/auth/register", "/auth/recover"
 
 export async function middleware(request: NextRequest) {
   if (!isSupabaseConfigured()) return NextResponse.next();
-  const { response, user } = await refreshSupabaseSession(request);
+  const { response, user, authError } = await refreshSupabaseSession(request);
   const pathname = request.nextUrl.pathname;
   const protectedRoute = protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  if (protectedRoute && !user) {
+  if (protectedRoute && !user && !authError) {
     const target = new URL("/auth/login", request.url);
     target.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(target);
+  }
+  if (user && pathname === "/") {
+    return NextResponse.redirect(new URL("/menu", request.url));
   }
   if (user && authenticationPrefixes.some((prefix) => pathname === prefix)) {
     return NextResponse.redirect(new URL("/menu", request.url));

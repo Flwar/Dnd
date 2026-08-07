@@ -573,6 +573,17 @@ export type Database = {
         };
         Returns: Json;
       };
+      submit_party_dialogue_vote: {
+        Args: {
+          p_command_id: string;
+          p_session_id: string;
+          p_character_id: string;
+          p_scene_id: string;
+          p_decision_id: string;
+          p_choice_id: string;
+        };
+        Returns: Json;
+      };
       transfer_party_leadership: {
         Args: { p_party_id: string; p_new_leader_character_id: string };
         Returns: Json;

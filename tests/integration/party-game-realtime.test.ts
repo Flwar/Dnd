@@ -116,8 +116,16 @@ describe("מצב Realtime של משחק חבורה", () => {
       is: vi.fn(() => membersBuilder),
       order: vi.fn().mockResolvedValue({
         data: [
-          { character_id: "20000000-0000-4000-8000-000000000002" },
-          { character_id: "20000000-0000-4000-8000-000000000007" },
+          {
+            character_id: "20000000-0000-4000-8000-000000000002",
+            connection_state: "connected",
+            last_seen_at: "2099-01-01T00:00:00.000Z",
+          },
+          {
+            character_id: "20000000-0000-4000-8000-000000000007",
+            connection_state: "reconnecting",
+            last_seen_at: "2099-01-01T00:00:00.000Z",
+          },
         ],
         error: null,
       }),
@@ -159,15 +167,15 @@ describe("מצב Realtime של משחק חבורה", () => {
     });
   });
 
-  it("נרשם לשלוש טבלאות, מדווח חיבור מחדש ומנקה את הערוץ", () => {
-    const changeHandlers: Array<() => void> = [];
+  it("נרשם לארבע טבלאות, מסנכרן חברות, מדווח חיבור מחדש ומנקה את הערוץ", () => {
+    const changeHandlers: Array<(payload?: unknown) => void> = [];
     let statusHandler: (
       status: "SUBSCRIBED" | "TIMED_OUT" | "CHANNEL_ERROR" | "CLOSED",
     ) => void = () => {
       throw new Error("Realtime status handler was not registered");
     };
     const channel = {
-      on: vi.fn((_type: string, _filter: unknown, handler: () => void) => {
+      on: vi.fn((_type: string, _filter: unknown, handler: (payload?: unknown) => void) => {
         changeHandlers.push(handler);
         return channel;
       }),
@@ -189,7 +197,7 @@ describe("מצב Realtime של משחק חבורה", () => {
       onConnectionChange: (state) => states.push(state),
     });
 
-    expect(channel.on).toHaveBeenCalledTimes(3);
+    expect(channel.on).toHaveBeenCalledTimes(4);
     expect(states).toEqual(["connecting"]);
     statusHandler("SUBSCRIBED");
     expect(states.at(-1)).toBe("connected");
@@ -198,12 +206,18 @@ describe("מצב Realtime של משחק חבורה", () => {
     changeHandlers[1]?.();
     changeHandlers[2]?.();
     expect(sources).toEqual(["session", "event", "vote"]);
+    changeHandlers[3]?.({
+      eventType: "UPDATE",
+      old: { left_at: null, connection_state: "connected", role: "member" },
+      new: { left_at: null, connection_state: "disconnected", role: "member" },
+    });
+    expect(sources).toEqual(["session", "event", "vote", "member"]);
     statusHandler("CHANNEL_ERROR");
     expect(states.at(-1)).toBe("reconnecting");
 
     cleanup();
     changeHandlers[0]?.();
-    expect(sources).toEqual(["session", "event", "vote"]);
+    expect(sources).toEqual(["session", "event", "vote", "member"]);
     expect(removeChannel).toHaveBeenCalledWith(channel as unknown as RealtimeChannel);
   });
 });

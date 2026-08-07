@@ -63,6 +63,7 @@ export function GameScene({
   onOpenPanel,
   onManualSave,
   onReturnToMenu,
+  travelLockedMessage,
 }: {
   save: SaveData;
   saveStatus: keyof typeof saveLabels;
@@ -71,6 +72,7 @@ export function GameScene({
   onOpenPanel: (panel: Exclude<GamePanel, null>) => void;
   onManualSave: () => void;
   onReturnToMenu: () => void;
+  travelLockedMessage?: string;
 }) {
   const [expandedLocationId, setExpandedLocationId] = useState<string | null>(null);
   const location = locationsById[save.story.currentLocationId] ?? locationsById["village-gate"];
@@ -196,7 +198,8 @@ export function GameScene({
             {interactions.length === 0 ? <p className="p-3 text-sm text-[#9e968a]">מיצית את החקירה במקום הזה. אפשר להמשיך בדרך.</p> : null}
           </div>
           <nav className="sticky bottom-0 flex flex-wrap gap-1.5 border-t border-[#c6a15b]/18 bg-[#090b0e]/96 p-2 backdrop-blur sm:gap-2 sm:p-3" aria-label="דרכי יציאה">
-            {exits.map((exit) => <GameButton key={exit.destinationId} variant="secondary" size="sm" onClick={() => onTravel(exit)} data-testid={`travel-${exit.destinationId}`}><Footprints className="size-4" aria-hidden="true" />{exit.label}<ChevronLeft className="size-4" aria-hidden="true" /></GameButton>)}
+            {travelLockedMessage ? <p className="w-full text-xs text-[#d9bf7c]" role="status">{travelLockedMessage}</p> : null}
+            {exits.map((exit) => <GameButton key={exit.destinationId} variant="secondary" size="sm" disabled={Boolean(travelLockedMessage)} onClick={() => onTravel(exit)} data-testid={`travel-${exit.destinationId}`}><Footprints className="size-4" aria-hidden="true" />{exit.label}<ChevronLeft className="size-4" aria-hidden="true" /></GameButton>)}
           </nav>
           </div>
         </section>

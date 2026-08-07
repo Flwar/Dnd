@@ -98,7 +98,7 @@ export type PartyGameSnapshot = {
   voteState: PartyGameVoteState;
 };
 
-export type PartyGameRealtimeSource = "session" | "event" | "vote";
+export type PartyGameRealtimeSource = "session" | "event" | "vote" | "member";
 
 export type PartyGameRealtimeCallbacks = {
   onChange: (source: PartyGameRealtimeSource) => void;
@@ -113,6 +113,7 @@ const EVENT_COLUMNS =
   "id,session_id,event_type,payload,created_by_character_id,sequence_number,created_at";
 const VOTE_COLUMNS =
   "session_id,scene_id,decision_id,character_id,choice_id,created_at,updated_at";
+const PARTY_MEMBER_PRESENCE_WINDOW_MS = 60_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -332,7 +333,7 @@ export async function fetchPartyGameSnapshot(
       .single(),
     supabase
       .from("party_members")
-      .select("character_id")
+      .select("character_id,connection_state,last_seen_at")
       .eq("party_id", sessionResult.data.party_id)
       .is("left_at", null)
       .order("joined_at", { ascending: true }),
@@ -368,7 +369,17 @@ export async function fetchPartyGameSnapshot(
       createdAt: event.created_at,
     }))
     .reverse();
-  const votes: PartyGameVote[] = (votesResult.data ?? []).map((vote) => ({
+  const presenceCutoff = Date.now() - PARTY_MEMBER_PRESENCE_WINDOW_MS;
+  const memberCharacterIds = (membersResult.data ?? [])
+    .filter((member) =>
+      (member.connection_state === "connected" || member.connection_state === "reconnecting") &&
+      new Date(member.last_seen_at).getTime() >= presenceCutoff,
+    )
+    .map((member) => member.character_id);
+  const activeMemberIds = new Set(memberCharacterIds);
+  const votes: PartyGameVote[] = (votesResult.data ?? [])
+    .filter((vote) => activeMemberIds.has(vote.character_id))
+    .map((vote) => ({
     sessionId: vote.session_id,
     sceneId: vote.scene_id,
     decisionId: vote.decision_id,
@@ -376,11 +387,9 @@ export async function fetchPartyGameSnapshot(
     choiceId: vote.choice_id,
     createdAt: vote.created_at,
     updatedAt: vote.updated_at,
-  }));
+    }));
   const combat = toCombatState(session.state);
   const leaderCharacterId = partyResult.data.leader_character_id;
-  const memberCharacterIds = (membersResult.data ?? []).map((member) => member.character_id);
-
   return {
     session,
     party: { leaderCharacterId, memberCharacterIds },
@@ -421,6 +430,22 @@ export function subscribeToPartyGame(
       "postgres_changes",
       { event: "*", schema: "public", table: "party_votes", filter: `session_id=eq.${sessionId}` },
       () => notify("vote"),
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "party_members" },
+      (payload) => {
+        const previous = isRecord(payload.old) ? payload.old : {};
+        const current = isRecord(payload.new) ? payload.new : {};
+        if (
+          payload.eventType !== "UPDATE" ||
+          previous.left_at !== current.left_at ||
+          previous.connection_state !== current.connection_state ||
+          previous.role !== current.role
+        ) {
+          notify("member");
+        }
+      },
     )
     .subscribe((status) => {
       if (disposed) return;

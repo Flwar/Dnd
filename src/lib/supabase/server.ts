@@ -4,7 +4,10 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { getPublicEnvironment, getServerEnvironment } from "@/lib/env";
+import { createTimedFetch } from "@/lib/network/timed-fetch";
 import type { Database } from "@/types/database";
+
+const supabaseServerFetch = createTimedFetch();
 
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
@@ -14,6 +17,7 @@ export async function createServerSupabaseClient() {
     environment.NEXT_PUBLIC_SUPABASE_URL,
     environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
+      global: { fetch: supabaseServerFetch },
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (cookiesToSet) => {
@@ -43,6 +47,7 @@ export function createServiceRoleSupabaseClient() {
     environment.NEXT_PUBLIC_SUPABASE_URL,
     environment.SUPABASE_SECRET_KEY,
     {
+      global: { fetch: supabaseServerFetch },
       auth: {
         autoRefreshToken: false,
         detectSessionInUrl: false,

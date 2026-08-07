@@ -566,7 +566,18 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
       error: null,
     });
     const members = queryBuilder({
-      data: [{ character_id: CHARACTER_ID }, { character_id: SECOND_CHARACTER_ID }],
+      data: [
+        {
+          character_id: CHARACTER_ID,
+          connection_state: "connected",
+          last_seen_at: "2099-01-01T00:00:00.000Z",
+        },
+        {
+          character_id: SECOND_CHARACTER_ID,
+          connection_state: "reconnecting",
+          last_seen_at: "2099-01-01T00:00:00.000Z",
+        },
+      ],
       error: null,
     });
     const votes = queryBuilder({
@@ -594,6 +605,14 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
 
     const result = await submitPartyGameCommandAction(input);
 
+    expect(userClient.rpc).toHaveBeenCalledWith("submit_party_dialogue_vote", {
+      p_command_id: COMMAND_ID,
+      p_session_id: SESSION_ID,
+      p_character_id: CHARACTER_ID,
+      p_scene_id: "scene-village-leader",
+      p_decision_id: "elric-quest",
+      p_choice_id: "elric-accept",
+    });
     expect(result).toMatchObject({
       ok: true,
       data: {
@@ -649,7 +668,14 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
       },
       cloudEnvelope,
     );
-    const members = queryBuilder({ data: [{ character_id: CHARACTER_ID }], error: null });
+    const members = queryBuilder({
+      data: [{
+        character_id: CHARACTER_ID,
+        connection_state: "connected",
+        last_seen_at: "2099-01-01T00:00:00.000Z",
+      }],
+      error: null,
+    });
     const votes = queryBuilder({
       data: [{ character_id: CHARACTER_ID, choice_id: "thal-medicine" }],
       error: null,
@@ -675,8 +701,15 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
     });
     expect(userClient.rpc).toHaveBeenNthCalledWith(
       2,
-      "submit_party_command",
-      expect.any(Object),
+      "submit_party_dialogue_vote",
+      {
+        p_command_id: COMMAND_ID,
+        p_session_id: SESSION_ID,
+        p_character_id: CHARACTER_ID,
+        p_scene_id: "scene-preparation",
+        p_decision_id: "thal-corruption",
+        p_choice_id: "thal-medicine",
+      },
     );
   });
 

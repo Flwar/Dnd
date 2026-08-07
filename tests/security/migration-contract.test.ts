@@ -238,3 +238,98 @@ test("King access is server-provisioned and enforced again inside character crea
   assert.doesNotMatch(kingMigration, /@/);
   assert.doesNotMatch(kingMigration, /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
 });
+
+test("party dialogue voting is atomic, idempotent, and does not race on a client version", async () => {
+  const recoveryMigration = await readFile(
+    new URL(
+      "../../supabase/migrations/20260807000100_party_recovery.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    recoveryMigration,
+    /create or replace function public\.submit_party_dialogue_vote\(\s*p_command_id uuid,\s*p_session_id uuid,\s*p_character_id uuid,\s*p_scene_id text,\s*p_decision_id text,\s*p_choice_id text\s*\)/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /select \* into target_session\s+from public\.party_sessions\s+where id = p_session_id\s+for update;/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /select \* into existing_command\s+from public\.party_commands\s+where command_id = p_command_id;[\s\S]+COMMAND_ID_ALREADY_USED[\s\S]+return jsonb_build_object\([\s\S]+?'duplicate', true/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /insert into public\.party_votes[\s\S]+on conflict \(session_id, scene_id, decision_id, character_id\) do update[\s\S]+set choice_id = excluded\.choice_id/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /insert into public\.party_commands[\s\S]+p_command_id, p_session_id, p_character_id, 'SUBMIT_DIALOGUE_VOTE',[\s\S]+target_session\.version, command_server_seed, command_payload, 'accepted'/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /next_version := target_session\.version \+ 1;[\s\S]+update public\.party_sessions[\s\S]+set version = next_version/i,
+  );
+  assert.doesNotMatch(
+    recoveryMigration,
+    /submit_party_dialogue_vote\([\s\S]{0,300}p_expected_session_version/i,
+  );
+});
+
+test("leaving a party transfers leadership and safely releases active sessions", async () => {
+  const recoveryMigration = await readFile(
+    new URL(
+      "../../supabase/migrations/20260807000100_party_recovery.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    recoveryMigration,
+    /if target_party\.leader_character_id = p_character_id and other_members > 0 then[\s\S]+order by joined_at, character_id[\s\S]+update public\.parties\s+set leader_character_id = next_leader/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /update public\.party_members\s+set role = case when character_id = next_leader then 'leader' else 'member' end[\s\S]+where party_id = p_party_id and left_at is null/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /update public\.party_members\s+set left_at = now\(\),[\s\S]+ready_state = false,[\s\S]+connection_state = 'disconnected'/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /elsif active_session_found and \(combat_active or other_members < 2\) then[\s\S]+set status = 'abandoned',[\s\S]+update public\.parties\s+set status = 'open'[\s\S]+set ready_state = false/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /update public\.party_sessions\s+set status = 'abandoned',[\s\S]+where status in \('forming', 'active'\);[\s\S]+update public\.parties\s+set status = 'closed',[\s\S]+update public\.party_members\s+set left_at = coalesce\(left_at, now\(\)\)/i,
+  );
+});
+
+test("party vote resolution excludes departed and stale presence", async () => {
+  const recoveryMigration = await readFile(
+    new URL(
+      "../../supabase/migrations/20260807000100_party_recovery.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const eligibleMemberFilter = /pm\.left_at is null\s+and pm\.connection_state in \('connected', 'reconnecting'\)\s+and pm\.last_seen_at >= now\(\) - interval '60 seconds'/gi;
+
+  assert.match(
+    recoveryMigration,
+    /create or replace function public\.resolve_party_vote\(/i,
+  );
+  assert.equal(
+    [...recoveryMigration.matchAll(eligibleMemberFilter)].length,
+    2,
+    "both the leader tie-break lookup and the vote tally must use live members only",
+  );
+  assert.match(
+    recoveryMigration,
+    /join public\.party_members pm[\s\S]+pm\.character_id = pv\.character_id/i,
+  );
+});

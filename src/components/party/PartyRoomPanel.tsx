@@ -30,6 +30,7 @@ import type {
 import type { ClassId } from "@/types/game";
 
 type Confirmation =
+  | { kind: "leave" }
   | { kind: "close" }
   | { kind: "remove"; characterId: string; characterName: string }
   | null;
@@ -99,13 +100,13 @@ export function PartyRoomPanel({
   const me = snapshot.members.find((member) => member.characterId === selectedCharacterId) ?? null;
   const isLeader = snapshot.party.leaderCharacterId === selectedCharacterId;
   const allReady = snapshot.members.length >= 2 && snapshot.members.every((member) => member.ready);
-  const leaderCannotLeave = isLeader && snapshot.members.length > 1;
   const lobbyOpen = snapshot.party.status === "open" && !snapshot.session;
   const sessionHref = snapshot.session
     ? `/game/${encodeURIComponent(selectedCharacterId)}?partySession=${encodeURIComponent(snapshot.session.id)}`
     : null;
 
   const confirmAction = () => {
+    if (confirmation?.kind === "leave") onLeave();
     if (confirmation?.kind === "close") onClose();
     if (confirmation?.kind === "remove") onRemove(confirmation.characterId);
     setConfirmation(null);
@@ -212,28 +213,37 @@ export function PartyRoomPanel({
           )}
 
           <div className="my-5 h-px bg-white/8" />
-          {!snapshot.session ? (
-            <div className="space-y-2">
-              <GameButton variant="ghost" className="w-full" onClick={onLeave} loading={busyAction === "leave"} disabled={Boolean(busyAction) || leaderCannotLeave}>
-                <LogOut className="size-4" />יציאה מהחבורה
+          <div className="space-y-2">
+            <GameButton
+              variant="ghost"
+              className="w-full"
+              onClick={() => setConfirmation({ kind: "leave" })}
+              loading={busyAction === "leave"}
+              disabled={Boolean(busyAction)}
+              data-testid="leave-party-button"
+            >
+              <LogOut className="size-4" />
+              {snapshot.session ? "עזיבת המסע המשותף" : "יציאה מהחבורה"}
+            </GameButton>
+            {isLeader ? (
+              <GameButton variant="danger" className="w-full" onClick={() => setConfirmation({ kind: "close" })} disabled={Boolean(busyAction)}>
+                <Trash2 className="size-4" />סגירת החבורה
               </GameButton>
-              {leaderCannotLeave ? <p className="text-center text-xs text-[#d4aa70]">כדי לצאת, העבירו קודם את ההנהגה.</p> : null}
-              {isLeader ? (
-                <GameButton variant="danger" className="w-full" onClick={() => setConfirmation({ kind: "close" })} disabled={Boolean(busyAction)}>
-                  <Trash2 className="size-4" />סגירת החבורה
-                </GameButton>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </aside>
       </div>
 
       {confirmation ? (
         <div className="border-t border-[#a43b4e]/30 bg-[#35131a]/70 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4" role="alert" aria-live="assertive">
           <p className="mb-3 text-sm text-[#ffe7e4] sm:mb-0">
-            {confirmation.kind === "close"
-              ? "לסגור את החבורה? כל החברים ינותקו מהחדר."
-              : `להסיר את ${confirmation.characterName} מהחבורה?`}
+            {confirmation.kind === "leave"
+              ? snapshot.session
+                ? "לעזוב את המסע המשותף? אם מתנהל קרב, המפגש ייסגר בבטחה והחברים שנותרו יחזרו לחדר."
+                : "לצאת מהחבורה? תמיד יהיה אפשר ליצור חבורה חדשה או להצטרף שוב."
+              : confirmation.kind === "close"
+                ? "לסגור את החבורה? כל החברים ינותקו מהחדר."
+                : `להסיר את ${confirmation.characterName} מהחבורה?`}
           </p>
           <div className="flex gap-2">
             <GameButton size="sm" variant="danger" onClick={confirmAction}>אישור</GameButton>

@@ -127,6 +127,8 @@ export type PartyGameActionResult =
 type GameSupabaseClient = SupabaseClient<Database>;
 type JsonObject = { [key: string]: Json | undefined };
 
+const PARTY_MEMBER_PRESENCE_WINDOW_MS = 60_000;
+
 type CommandReceipt = {
   commandId: string;
   status: "pending" | "accepted" | "rejected";
@@ -811,7 +813,7 @@ async function resolveDialogueVote(
   const [membersResult, votesResult] = await Promise.all([
     context.serviceClient
       .from("party_members")
-      .select("character_id")
+      .select("character_id,connection_state,last_seen_at")
       .eq("party_id", context.session.party_id)
       .is("left_at", null),
     context.serviceClient
@@ -834,8 +836,22 @@ async function resolveDialogueVote(
     };
   }
 
-  const requiredVotes = membersResult.data?.length ?? 0;
-  const submittedVotes = new Set((votesResult.data ?? []).map((vote) => vote.character_id)).size;
+  const presenceCutoff = Date.now() - PARTY_MEMBER_PRESENCE_WINDOW_MS;
+  const eligibleMemberIds = new Set(
+    (membersResult.data ?? [])
+      .filter((member) =>
+        member.character_id === input.characterId ||
+        ((member.connection_state === "connected" || member.connection_state === "reconnecting") &&
+          new Date(member.last_seen_at).getTime() >= presenceCutoff),
+      )
+      .map((member) => member.character_id),
+  );
+  const requiredVotes = eligibleMemberIds.size;
+  const submittedVotes = new Set(
+    (votesResult.data ?? [])
+      .filter((vote) => eligibleMemberIds.has(vote.character_id))
+      .map((vote) => vote.character_id),
+  ).size;
   if (!requiredVotes || submittedVotes < requiredVotes) {
     return {
       ok: true,
@@ -1644,14 +1660,23 @@ export async function submitPartyGameCommandAction<Type extends PartyGameCommand
     if (validation) return validation;
   }
 
-  const submitted = await context.userClient.rpc("submit_party_command", {
-    p_command_id: input.commandId,
-    p_session_id: input.sessionId,
-    p_character_id: input.characterId,
-    p_expected_session_version: input.expectedVersion,
-    p_command_type: input.type,
-    p_payload: databasePayload(input, context.session.current_scene_id),
-  });
+  const submitted = input.type === "SUBMIT_DIALOGUE_VOTE"
+    ? await context.userClient.rpc("submit_party_dialogue_vote", {
+        p_command_id: input.commandId,
+        p_session_id: input.sessionId,
+        p_character_id: input.characterId,
+        p_scene_id: context.session.current_scene_id,
+        p_decision_id: input.payload.decisionId,
+        p_choice_id: input.payload.choiceId,
+      })
+    : await context.userClient.rpc("submit_party_command", {
+        p_command_id: input.commandId,
+        p_session_id: input.sessionId,
+        p_character_id: input.characterId,
+        p_expected_session_version: input.expectedVersion,
+        p_command_type: input.type,
+        p_payload: databasePayload(input, context.session.current_scene_id),
+      });
   if (submitted.error) return mapCommandError(submitted.error);
   const receipt = parseReceipt(submitted.data);
   if (!receipt) return { ok: false, code: "UNKNOWN", message: "שרת המשחק החזיר תשובה שאינה תקינה." };

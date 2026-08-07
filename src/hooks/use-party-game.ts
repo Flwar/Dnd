@@ -27,6 +27,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 const REFRESH_DEBOUNCE_MS = 100;
 const FALLBACK_REFRESH_MS = 15_000;
+const PARTY_HEARTBEAT_MS = 20_000;
 
 const CONNECTION_MESSAGES: Record<PartyGameConnectionState, string> = {
   connecting: "מתחברים למשחק המשותף…",
@@ -215,6 +216,52 @@ export function usePartyGame({
       unsubscribe();
     };
   }, [enabled, refresh, sessionId, supabase]);
+
+  const activePartyId = state?.session.partyId ?? null;
+
+  useEffect(() => {
+    if (!enabled || !supabase || !activePartyId || !characterId) return;
+    let active = true;
+
+    const reportPresence = async (connectionState: "connected" | "disconnected") => {
+      const result = await supabase.rpc("update_party_connection", {
+        p_party_id: activePartyId,
+        p_character_id: characterId,
+        p_connection_state: connectionState,
+      });
+      if (
+        active &&
+        result.error &&
+        (result.error.message.includes("AUTHENTICATION_REQUIRED") ||
+          result.error.message.includes("JWT"))
+      ) {
+        setError("החיבור לחשבון פג. יש להתחבר מחדש כדי להמשיך במשחק המשותף.");
+      }
+    };
+
+    const heartbeat = () => {
+      if (navigator.onLine && document.visibilityState === "visible") {
+        void reportPresence("connected");
+      }
+    };
+    const handleOnline = () => heartbeat();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") heartbeat();
+    };
+
+    heartbeat();
+    const interval = window.setInterval(heartbeat, PARTY_HEARTBEAT_MS);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      void reportPresence("disconnected");
+    };
+  }, [activePartyId, characterId, enabled, supabase]);
 
   const submit = useCallback(
     async <T extends PartyGameCommandType>(
