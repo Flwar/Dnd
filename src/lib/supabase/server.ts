@@ -7,7 +7,9 @@ import { getPublicEnvironment, getServerEnvironment } from "@/lib/env";
 import { createTimedFetch } from "@/lib/network/timed-fetch";
 import type { Database } from "@/types/database";
 
-const supabaseServerFetch = createTimedFetch();
+const supabaseServerFetch = createTimedFetch(5_000, globalThis.fetch, {
+  retrySafeRequests: true,
+});
 
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();

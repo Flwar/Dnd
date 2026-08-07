@@ -9,6 +9,7 @@ import { classesById } from "@/content/classes";
 import { itemsById } from "@/content/items";
 import { questsById } from "@/content/quests";
 import { unwrapCloudSaveEnvelope } from "@/lib/game/save-envelope";
+import { assertCharacterQuerySucceeded } from "@/lib/game/character-query-result";
 import { npcs } from "@/content/npcs";
 import type {
   Attributes,
@@ -45,6 +46,17 @@ export async function loadCharacterGame(characterId: string): Promise<LoadedGame
     supabase.from("character_discovered_locations").select("*").eq("character_id", characterId),
     supabase.rpc("get_latest_character_save", { p_character_id: characterId }),
   ]);
+
+  assertCharacterQuerySucceeded(characterResult, "character");
+  assertCharacterQuerySucceeded(attributesResult, "attributes");
+  assertCharacterQuerySucceeded(inventoryResult, "inventory");
+  assertCharacterQuerySucceeded(equipmentResult, "equipment");
+  assertCharacterQuerySucceeded(questsResult, "quests");
+  assertCharacterQuerySucceeded(flagsResult, "story-flags");
+  assertCharacterQuerySucceeded(relationshipsResult, "relationships");
+  assertCharacterQuerySucceeded(locationsResult, "discovered-locations");
+  assertCharacterQuerySucceeded(latestResult, "latest-save");
+
   const row = characterResult.data;
   const attributeRow = attributesResult.data;
   if (!row || !attributeRow) return null;

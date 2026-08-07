@@ -11,10 +11,12 @@ import {
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { UserMinus, UserPlus, X } from "lucide-react";
+import {
+  canSendPresenceHeartbeat,
+  getPresenceHeartbeatDelay,
+} from "@/lib/presence/heartbeat-schedule";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import type { PlayerPresenceEventRow } from "@/types/database";
-
-const HEARTBEAT_INTERVAL_MS = 20_000;
 
 export type OnlinePlayer = {
   userId: string;
@@ -112,6 +114,7 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
       setPlayers([]);
       return;
     }
+    if (!canSendPresenceHeartbeat(document.visibilityState, navigator.onLine)) return;
 
     try {
       const supabase = createBrowserSupabaseClient();
@@ -163,29 +166,69 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
     let active = true;
     let hasConnected = false;
     let heartbeatInFlight = false;
+    let consecutiveFailures = 0;
+    let heartbeatTimer: number | undefined;
+
+    const canUseNetwork = () => canSendPresenceHeartbeat(
+      document.visibilityState,
+      navigator.onLine,
+    );
+
+    const clearHeartbeatTimer = () => {
+      if (heartbeatTimer === undefined) return;
+      window.clearTimeout(heartbeatTimer);
+      heartbeatTimer = undefined;
+    };
+
+    const scheduleHeartbeat = (delayMs: number) => {
+      clearHeartbeatTimer();
+      if (!active || !canUseNetwork()) return;
+      heartbeatTimer = window.setTimeout(() => {
+        heartbeatTimer = undefined;
+        void heartbeat();
+      }, delayMs);
+    };
 
     const heartbeat = async () => {
-      if (!active || heartbeatInFlight) return;
+      clearHeartbeatTimer();
+      if (!active || heartbeatInFlight || !canUseNetwork()) return;
       heartbeatInFlight = true;
       if (!hasConnected) setStatus("connecting");
+      let heartbeatSucceeded = false;
       try {
         const { error } = await supabase.rpc("heartbeat_player_presence", {
           p_connection_id: connectionId,
         });
         if (!active) return;
         if (error) {
-          setStatus("disconnected");
+          consecutiveFailures += 1;
+          setStatus(hasConnected ? "reconnecting" : "disconnected");
           return;
         }
+        heartbeatSucceeded = true;
+        consecutiveFailures = 0;
         hasConnected = true;
         setStatus("connected");
-        await refresh();
+        if (canUseNetwork()) await refresh();
       } catch {
         if (!active) return;
-        setStatus("disconnected");
+        consecutiveFailures += 1;
+        setStatus(hasConnected ? "reconnecting" : "disconnected");
       } finally {
         heartbeatInFlight = false;
+        if (active && canUseNetwork()) {
+          scheduleHeartbeat(getPresenceHeartbeatDelay(
+            heartbeatSucceeded ? 0 : consecutiveFailures,
+          ));
+        }
       }
+    };
+
+    const resumeHeartbeat = () => {
+      if (!active || !canUseNetwork()) return;
+      consecutiveFailures = 0;
+      clearHeartbeatTimer();
+      if (!heartbeatInFlight) void heartbeat();
     };
 
     const channel = supabase
@@ -208,13 +251,18 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
         if (channelStatus === "CLOSED") setStatus("disconnected");
       });
 
-    void heartbeat();
-    const heartbeatTimer = window.setInterval(() => void heartbeat(), HEARTBEAT_INTERVAL_MS);
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") void heartbeat();
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        resumeHeartbeat();
+      } else {
+        clearHeartbeatTimer();
+      }
     };
-    const handleOnline = () => void heartbeat();
-    const handleOffline = () => setStatus("disconnected");
+    const handleOnline = () => resumeHeartbeat();
+    const handleOffline = () => {
+      clearHeartbeatTimer();
+      setStatus("disconnected");
+    };
     const handlePageHide = () => {
       const body = JSON.stringify({ connectionId });
       if (
@@ -238,10 +286,11 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("pagehide", handlePageHide);
+    resumeHeartbeat();
 
     return () => {
       active = false;
-      window.clearInterval(heartbeatTimer);
+      clearHeartbeatTimer();
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);

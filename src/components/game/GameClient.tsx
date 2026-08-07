@@ -344,7 +344,10 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
   }, [cacheKey, notify, replaceSave, setSaveStatus]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => { void commit(saveRef.current, "periodic-autosave"); }, 60_000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      void commit(saveRef.current, "periodic-autosave");
+    }, 180_000);
     const beforeUnload = () => localStorage.setItem(cacheKey, JSON.stringify({ save: saveRef.current, pending: saveStatus !== "saved" }));
     window.addEventListener("beforeunload", beforeUnload);
     return () => { window.clearInterval(interval); window.removeEventListener("beforeunload", beforeUnload); };
