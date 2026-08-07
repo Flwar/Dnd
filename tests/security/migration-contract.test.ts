@@ -176,6 +176,20 @@ test("global presence is authenticated, sanitized, multi-tab safe, and realtime"
   assert.doesNotMatch(presenceMigration, /\bemail\b(?! addresses)/i);
 });
 
+test("presence heartbeat lease tolerates mobile timer drift", async () => {
+  const leaseMigration = await readFile(
+    new URL(
+      "../../supabase/migrations/20260808000100_presence_lease_resilience.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(leaseMigration, /last_seen_at < now\(\) - interval '180 seconds'/i);
+  assert.match(leaseMigration, /last_seen_at >= now\(\) - interval '180 seconds'/i);
+  assert.match(leaseMigration, /notify pgrst, 'reload schema'/i);
+});
+
 test("environment helper accepts publishable keys and exposes a safe probe", async () => {
   const environmentModule = await readFile(
     new URL("../../src/lib/env.ts", import.meta.url),

@@ -1,23 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { classifyAuthError } from "../../src/lib/auth/auth-error-classifier";
+import { classifyAuthError } from "@/lib/auth/auth-error-classifier";
 
-describe("auth error classifier", () => {
-  it.each([
-    { name: "AuthRetryableFetchError", status: 0 },
-    { name: "AuthApiError", status: 429 },
-    { name: "AuthApiError", status: 500 },
-    { name: "AuthApiError", status: 503 },
-  ])("keeps a session intact for a retryable failure", (error) => {
-    expect(classifyAuthError(error)).toBe("retryable");
+describe("auth error classification", () => {
+  it.each([429, 500, 503, 599])("treats HTTP %i as retryable", (status) => {
+    expect(classifyAuthError({ status, name: "AuthApiError" })).toBe("retryable");
+  });
+
+  it("recognizes Supabase transport failures even when their status is zero", () => {
+    expect(classifyAuthError({ status: 0, name: "AuthRetryableFetchError" })).toBe("retryable");
   });
 
   it.each([
-    null,
-    new Error("invalid token"),
-    { name: "AuthSessionMissingError", status: 400 },
-    { name: "AuthApiError", status: 401 },
-    { name: "AuthApiError", status: 403 },
-  ])("treats a permanent auth failure as an invalid session", (error) => {
+    { status: 401, name: "AuthSessionMissingError" },
+    { status: 403, name: "AuthApiError" },
+    { status: 400, name: "AuthInvalidTokenResponseError" },
+    new Error("unknown auth failure"),
+  ])("routes non-temporary failures through session recovery", (error) => {
     expect(classifyAuthError(error)).toBe("invalid-session");
   });
 });
