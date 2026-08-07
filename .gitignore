@@ -50,3 +50,4 @@ next-env.d.ts
 /test-results/
 /supabase/.branches/
 /supabase/.temp/
+/.codex-dev.*.log

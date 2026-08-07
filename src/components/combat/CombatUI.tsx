@@ -9,7 +9,16 @@ import { CombatOutcome } from "./CombatOutcome";
 import { CombatantCard } from "./CombatantCard";
 import { TurnOrder } from "./TurnOrder";
 import { acquireBodyScrollLock } from "@/lib/body-scroll-lock";
+import { getAssetPath } from "@/lib/assets/manifest";
+import { ArtDirectedPicture } from "@/components/ui/ArtDirectedPicture";
 import type { CombatUIProps } from "./types";
+
+const encounterBackdrops: Readonly<Record<string, string>> = {
+  "tutorial-rat": "background-mine-entrance",
+  "road-ambush": "background-mine-road",
+  "flooded-passage-pack": "background-flooded-passage",
+  "stone-guardian-boss": "background-guardian-sanctum",
+};
 
 export function CombatUI({
   state,
@@ -44,6 +53,7 @@ export function CombatUI({
   const canAct = state.phase === "active" && activeCombatantId === playerCombatantId && !player?.defeated;
   const guardian = enemies.find((combatant) => combatant.enemyId === "ancient-stone-guardian");
   const guardianTelegraph = guardian?.statuses.some((status) => status.statusId === "telegraphed");
+  const backdropKey = encounterBackdrops[state.encounterId] ?? "background-main-tunnel";
 
   useEffect(() => {
     const body = document.body;
@@ -103,9 +113,10 @@ export function CombatUI({
         aria-label="זירת הקרב"
         data-testid="combat-screen"
         data-locks-exploration="true"
-        className="fixed inset-0 z-[120] isolate flex h-dvh w-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_50%_15%,rgba(42,69,78,.45),transparent_30rem),linear-gradient(180deg,#101418_0%,#07090b_58%,#050607_100%)] text-[#eee5d6] outline-none"
+        className="fixed inset-0 z-[120] isolate flex h-dvh w-screen flex-col overflow-hidden bg-[#050607] text-[#eee5d6] outline-none"
       >
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-45 [background-image:linear-gradient(rgba(255,255,255,.018)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.018)_1px,transparent_1px)] [background-size:32px_32px]" />
+        <ArtDirectedPicture desktopSrc={getAssetPath(backdropKey)} mobileSrc={getAssetPath(`${backdropKey}-mobile`)} alt="" priority pictureClassName="pointer-events-none absolute inset-0 -z-20" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(2,4,5,.42),rgba(3,5,6,.72)_45%,rgba(2,3,4,.94)),radial-gradient(ellipse_at_50%_42%,transparent_15%,rgba(0,0,0,.62)_95%)]" />
 
         <header className="safe-inline-area shrink-0 border-b border-[#c6a15b]/25 bg-[linear-gradient(90deg,rgba(17,20,23,.96),rgba(35,26,17,.88),rgba(17,20,23,.96))] px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] shadow-[0_12px_32px_rgba(0,0,0,.35)] sm:px-6 sm:py-4">
           <div className="mx-auto flex max-w-[96rem] items-center justify-between gap-3">
@@ -141,34 +152,21 @@ export function CombatUI({
           <section
             aria-labelledby="battlefield-title"
             data-testid="combat-battlefield-scroll-region"
-            className="mx-auto h-full min-w-0 max-w-6xl space-y-4 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4"
+            className="mx-auto grid h-full min-w-0 max-w-6xl grid-rows-[auto_minmax(0,1fr)_auto] gap-2 overflow-hidden px-2 py-2 sm:gap-3 sm:px-5 sm:py-4"
           >
-            <section aria-labelledby="combat-objective-title" className="border border-[#c6a15b]/25 bg-[linear-gradient(145deg,rgba(47,37,24,.72),rgba(12,14,16,.94))] px-3 py-2 sm:p-4">
-              <h2 id="combat-objective-title" className="flex items-center gap-2 text-sm font-bold text-[#f0cf82] sm:text-base"><BookOpenCheck className="size-4" aria-hidden="true" /> מטרת הקרב</h2>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#c9c0b1]">{objective}</p>
+            <section aria-labelledby="combat-objective-title" className="flex items-center gap-2 border border-[#c6a15b]/28 bg-[#100e0b]/84 px-2.5 py-1.5 backdrop-blur sm:px-4 sm:py-3">
+              <BookOpenCheck className="size-4 shrink-0 text-[#f0cf82]" aria-hidden="true" />
+              <h2 id="combat-objective-title" className="sr-only">מטרת הקרב</h2>
+              <p className="line-clamp-1 min-w-0 text-xs font-semibold text-[#ddd2bf] sm:line-clamp-2 sm:text-sm">{objective}</p>
             </section>
 
-            {tutorialHints.length > 0 ? (
-              <details className="border border-[#62c6df]/25 bg-[#0d2229]/70 px-3 py-2">
-                <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-[#b7e7ef] outline-none focus-visible:ring-2 focus-visible:ring-[#70c7da]">
-                  <CircleHelp className="size-4" aria-hidden="true" /> רמזי הדרכה
-                </summary>
-                <ol className="mt-2 space-y-1 text-xs leading-5 text-[#a9c4ca]">
-                  {tutorialHints.map((hint, index) => (
-                    <li key={hint} className="flex gap-2"><bdi dir="ltr" className="text-[#70c7da]">{index + 1}.</bdi><span>{hint}</span></li>
-                  ))}
-                </ol>
-              </details>
-            ) : null}
-
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              <h2 id="battlefield-title" className="flex items-center gap-2 font-bold text-[#d9bf7c]"><Crosshair className="size-4" aria-hidden="true" /> זירת הקרב</h2>
-              <p className="text-xs text-[#8f877a]">בחרו דמות או אויב כדי לקבוע מטרה</p>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xs font-bold tracking-[0.18em] text-[#77b686]">החבורה</h3>
-              <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid min-h-0 grid-cols-2 gap-2 sm:gap-4">
+              <section className="flex min-h-0 flex-col" aria-labelledby="allies-title">
+              <div className="mb-1 flex items-center justify-between gap-1 px-1 sm:mb-2">
+                <h2 id="allies-title" className="text-[0.68rem] font-bold tracking-[0.16em] text-[#9fc5a8] sm:text-xs">החבורה</h2>
+                <span className="text-[0.62rem] text-[#a69d90]">{allies.filter((ally) => !ally.defeated).length} עומדים</span>
+              </div>
+              <div className={`grid min-h-0 flex-1 content-center gap-1.5 sm:gap-3 ${allies.length > 2 ? "grid-cols-2" : "grid-cols-1"}`}>
                 {allies.map((combatant) => (
                   <CombatantCard
                     key={combatant.id}
@@ -181,12 +179,15 @@ export function CombatUI({
                   />
                 ))}
               </div>
-            </div>
+              </section>
 
-            <div>
-              <h3 className="mb-2 text-xs font-bold tracking-[0.18em] text-[#d66a71]">האויבים</h3>
+              <section className="flex min-h-0 flex-col" aria-labelledby="battlefield-title">
+              <div className="mb-1 flex items-center justify-between gap-1 px-1 sm:mb-2">
+                <h2 id="battlefield-title" className="flex items-center gap-1 text-[0.68rem] font-bold tracking-[0.16em] text-[#df8588] sm:text-xs"><Crosshair className="size-3.5" aria-hidden="true" />האויבים</h2>
+                <span className="text-[0.62rem] text-[#a69d90]">בחרו מטרה</span>
+              </div>
               <AnimatePresence initial={false}>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className={`grid min-h-0 flex-1 content-center gap-1.5 sm:gap-3 ${enemies.length > 2 ? "grid-cols-2" : "grid-cols-1"}`}>
                   {enemies.map((combatant) => (
                     <CombatantCard
                       key={combatant.id}
@@ -201,12 +202,21 @@ export function CombatUI({
                   ))}
                 </div>
               </AnimatePresence>
+              </section>
             </div>
 
-            <details>
-              <summary className="cursor-pointer border border-white/10 bg-black/30 px-3 py-2 text-sm font-bold text-[#d9bf7c] outline-none focus-visible:ring-2 focus-visible:ring-[#70c7da]">פתיחת יומן הקרב</summary>
-              <CombatLog events={state.log} />
-            </details>
+            <div className="hidden grid-cols-2 gap-3 sm:grid">
+              {tutorialHints.length > 0 ? (
+                <details className="border border-[#62c6df]/25 bg-[#0d2229]/80 px-3 py-2 backdrop-blur">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-[#b7e7ef] outline-none focus-visible:ring-2 focus-visible:ring-[#70c7da]"><CircleHelp className="size-4" aria-hidden="true" /> רמזי הדרכה</summary>
+                  <ol className="mt-2 space-y-1 text-xs leading-5 text-[#a9c4ca]">{tutorialHints.map((hint, index) => <li key={hint} className="flex gap-2"><bdi dir="ltr" className="text-[#70c7da]">{index + 1}.</bdi><span>{hint}</span></li>)}</ol>
+                </details>
+              ) : <span />}
+              <details>
+                <summary className="cursor-pointer border border-white/10 bg-black/55 px-3 py-2 text-sm font-bold text-[#d9bf7c] outline-none focus-visible:ring-2 focus-visible:ring-[#70c7da]">פתיחת יומן הקרב</summary>
+                <CombatLog events={state.log} />
+              </details>
+            </div>
           </section>
         </div>
 
@@ -217,7 +227,7 @@ export function CombatUI({
         ) : outcome ? null : (
           <div
             data-testid="combat-action-region"
-            className="safe-inline-area max-h-[45dvh] shrink-0 overflow-y-auto overscroll-contain border-t border-[#c6a15b]/30 bg-[#07090b]/98 pb-[env(safe-area-inset-bottom)]"
+            className="safe-inline-area shrink-0 overflow-hidden border-t border-[#c6a15b]/30 bg-[#07090b]/98 pb-[env(safe-area-inset-bottom)]"
           >
             <ActionDock
               player={player}

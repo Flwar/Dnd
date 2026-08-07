@@ -52,4 +52,39 @@ describe("חדות נכסי רסטר", () => {
       expect(file.size, asset.key).toBeLessThan(750_000);
     }
   });
+
+  it("שומר איור מלא וחד לכל מקצוע במקום תמונת placeholder", async () => {
+    const classPreviews = assetManifest.filter(
+      (asset) => asset.key.startsWith("class-") && asset.key.endsWith("-preview"),
+    );
+
+    expect(classPreviews).toHaveLength(7);
+    for (const asset of classPreviews) {
+      const filePath = localAssetPath(asset.path);
+      const [metadata, file] = await Promise.all([sharp(filePath).metadata(), stat(filePath)]);
+
+      expect(metadata.width, asset.key).toBeGreaterThanOrEqual(1280);
+      expect(metadata.height, asset.key).toBeGreaterThanOrEqual(720);
+      expect(file.size, asset.key).toBeLessThan(750_000);
+    }
+  });
+
+  it("שומר את סמלי המלך קריאים וחדים גם במסך Retina", async () => {
+    const kingAssetKeys = new Set([
+      "ability-crown-shard-strike",
+      "ability-royal-decree",
+      "ability-sovereign-aegis",
+      "item-shattered-king-crown",
+    ]);
+    const kingAssets = assetManifest.filter((asset) => kingAssetKeys.has(asset.key));
+
+    expect(kingAssets).toHaveLength(4);
+    for (const asset of kingAssets) {
+      const filePath = localAssetPath(asset.path);
+      const metadata = await sharp(filePath).metadata();
+
+      expect(metadata.width, asset.key).toBeGreaterThanOrEqual(384);
+      expect(metadata.height, asset.key).toBeGreaterThanOrEqual(384);
+    }
+  });
 });

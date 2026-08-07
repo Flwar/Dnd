@@ -1,8 +1,8 @@
 import type { StatusDefinition } from "../types/game";
 
 export const statuses: StatusDefinition[] = [
-  { id: "defending", name: "מגננה", description: "השריון מתחזק עד התור הבא.", iconAssetKey: "status-defending", maxStacks: 1, armorModifier: 4 },
-  { id: "guarded", name: "משמר יציב", description: "עמידה הגנתית מפחיתה את עוצמת הפגיעה.", iconAssetKey: "status-guarded", maxStacks: 1, armorModifier: 5, damageMultiplier: 0.85 },
+  { id: "defending", name: "מגננה", description: "השריון מתחזק והפגיעה הבאה נחלשת משמעותית.", iconAssetKey: "status-defending", maxStacks: 1, armorModifier: 4, incomingDamageMultiplier: 0.5 },
+  { id: "guarded", name: "משמר יציב", description: "עמידה הגנתית מפחיתה את הנזק הנכנס.", iconAssetKey: "status-guarded", maxStacks: 1, armorModifier: 4, incomingDamageMultiplier: 0.8 },
   { id: "exposed-rune", name: "רונה חשופה", description: "סדק מאיר חושף נקודת תורפה בשריון האבן.", iconAssetKey: "status-exposed-rune", maxStacks: 1, armorModifier: -6 },
   { id: "burning", name: "בוער", description: "אש מכרסמת במטרה בכל תחילת תור.", iconAssetKey: "status-burning", maxStacks: 3, damagePerTurn: 2 },
   { id: "chilled", name: "קפוא", description: "הקור מכביד על התנועה ופוגע בדיוק.", iconAssetKey: "status-chilled", maxStacks: 2, accuracyModifier: -2 },

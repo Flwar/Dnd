@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Backpack,
   BookOpenText,
+  ChevronDown,
   ChevronLeft,
+  ChevronUp,
   CircleUserRound,
   Compass,
   Footprints,
@@ -15,9 +17,11 @@ import {
   Settings,
   Sparkles,
   Swords,
+  WandSparkles,
 } from "lucide-react";
 import { GameButton } from "@/components/ui/GameButton";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { ArtDirectedPicture } from "@/components/ui/ArtDirectedPicture";
 import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { evaluateCondition } from "@/game/dialogue";
 import { locationsById } from "@/content/locations";
@@ -25,6 +29,7 @@ import { questsById } from "@/content/quests";
 import { classesById } from "@/content/classes";
 import { getAssetPath } from "@/lib/assets/manifest";
 import { audioManager } from "@/lib/audio/audio-manager";
+import { getVisibleConsequences } from "@/content/consequences";
 import type { GamePanel } from "@/store/game-store";
 import type { LocationExit, LocationInteraction, SaveData } from "@/types/game";
 
@@ -47,6 +52,8 @@ const saveLabels = {
 };
 
 const mineLocationIds = new Set(["mine-entrance", "main-tunnel", "abandoned-tool-store", "flooded-passage", "pillar-hall", "hidden-chamber", "guardian-sanctum", "shard-sanctum"]);
+const corruptionLocationIds = new Set(["pillar-hall", "hidden-chamber", "guardian-sanctum", "shard-sanctum"]);
+const warmInteriorIds = new Set(["wet-raven-inn", "smithy", "healer-hut", "headman-house"]);
 
 export function GameScene({
   save,
@@ -65,8 +72,12 @@ export function GameScene({
   onManualSave: () => void;
   onReturnToMenu: () => void;
 }) {
+  const [expandedLocationId, setExpandedLocationId] = useState<string | null>(null);
   const location = locationsById[save.story.currentLocationId] ?? locationsById["village-gate"];
+  const mobileDetailsOpen = expandedLocationId === location.id;
   const isMineLocation = mineLocationIds.has(location.id);
+  const isCorruptionLocation = corruptionLocationIds.has(location.id);
+  const isWarmInterior = warmInteriorIds.has(location.id);
   const characterClass = classesById[save.character.classId];
   const context = { character: save.character, story: save.story, inventory: save.inventory, quests: save.quests };
   const interactions = location.interactions.filter((interaction) =>
@@ -77,6 +88,8 @@ export function GameScene({
   const activeQuestState = save.quests.find((quest) => quest.status === "active") ?? save.quests[0];
   const activeQuest = activeQuestState ? questsById[activeQuestState.questId] : undefined;
   const visibleObjectives = activeQuest?.objectives.filter((objective) => activeQuestState?.objectives[objective.id] !== "hidden") ?? [];
+  const visibleConsequences = getVisibleConsequences(save.story.flags, location.id);
+  const hasHiddenMobileActions = !mobileDetailsOpen && interactions.length > 2;
 
   useEffect(() => {
     const ambience = mineLocationIds.has(location.id) ? "mine" : "village";
@@ -85,14 +98,12 @@ export function GameScene({
   }, [location.id]);
 
   return (
-    <main id="main-content" className="relative min-h-dvh overflow-x-hidden bg-[#07090b] pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:h-dvh lg:overflow-hidden lg:pb-0">
-      <picture key={location.id} className="scene-parallax absolute inset-0">
-        <source media="(max-width: 760px)" srcSet={getAssetPath(`${location.backgroundAssetKey}-mobile`)} />
-        <img src={getAssetPath(location.backgroundAssetKey)} alt={location.description} className="scene-parallax-image size-full object-cover" />
-      </picture>
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,6,8,.2),rgba(4,6,8,.48)_48%,rgba(4,6,8,.96)_100%),radial-gradient(circle_at_center,transparent_25%,rgba(0,0,0,.62)_100%)]" />
-      <div className="animate-fog pointer-events-none absolute inset-x-[-10%] bottom-[28%] h-44 bg-[radial-gradient(ellipse,rgba(154,188,197,.14),transparent_68%)] blur-2xl" />
-      <div className={`scene-particles pointer-events-none absolute inset-0 ${isMineLocation ? "scene-particles--mine" : "scene-particles--village"}`} aria-hidden="true">
+    <main id="main-content" data-location={location.id} className="relative h-dvh overflow-hidden bg-[#07090b] pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <ArtDirectedPicture key={location.id} desktopSrc={getAssetPath(location.backgroundAssetKey)} mobileSrc={getAssetPath(`${location.backgroundAssetKey}-mobile`)} alt={location.description} priority pictureClassName="scene-parallax absolute inset-0" className="scene-parallax-image" />
+      <div className="scene-grade absolute inset-0" aria-hidden="true" />
+      <div className="scene-canvas-grain absolute inset-0" aria-hidden="true" />
+      <div className="animate-fog pointer-events-none absolute inset-x-[-10%] bottom-[31%] h-36 bg-[radial-gradient(ellipse,rgba(154,168,166,.1),transparent_68%)] blur-2xl" />
+      <div className={`scene-particles pointer-events-none absolute inset-0 ${isCorruptionLocation ? "scene-particles--corruption" : isMineLocation ? "scene-particles--dust" : isWarmInterior ? "scene-particles--embers" : "scene-particles--mist"}`} aria-hidden="true">
         {Array.from({ length: 10 }, (_, index) => (
           <span
             key={index}
@@ -105,9 +116,10 @@ export function GameScene({
           />
         ))}
       </div>
-      {isMineLocation ? <div className="scene-rune-light pointer-events-none absolute inset-x-[18%] top-[8%] h-[38%]" aria-hidden="true" /> : <div className="scene-torch-light pointer-events-none absolute bottom-[16%] end-[8%] size-72" aria-hidden="true" />}
+      {isCorruptionLocation ? <div className="scene-rune-light pointer-events-none absolute inset-x-[18%] top-[8%] h-[38%]" aria-hidden="true" /> : isWarmInterior ? <div className="scene-torch-light pointer-events-none absolute bottom-[16%] end-[8%] size-72" aria-hidden="true" /> : null}
+      <div className={`scene-foreground pointer-events-none absolute inset-0 ${isMineLocation ? "scene-foreground--mine" : "scene-foreground--open"}`} aria-hidden="true" />
 
-      <header className="safe-inline-area relative z-20 border-b border-[#c6a15b]/22 bg-black/72 py-2 [--safe-inline-padding:.75rem] backdrop-blur-md sm:[--safe-inline-padding:1.25rem]">
+      <header className="safe-inline-area relative z-20 border-b border-[#c6a15b]/22 bg-black/72 pb-2 pt-[max(.5rem,env(safe-area-inset-top))] [--safe-inline-padding:.75rem] backdrop-blur-md sm:[--safe-inline-padding:1.25rem]">
         <div className="mx-auto flex max-w-[110rem] items-center gap-3">
           <button className="group flex min-w-0 flex-1 items-center gap-3 text-right" onClick={() => onOpenPanel("character")} aria-label="פתיחת דף הדמות">
             <div className="relative size-11 shrink-0 overflow-hidden rounded-full border border-[#c6a15b]/60">
@@ -131,7 +143,7 @@ export function GameScene({
         </div>
       </header>
 
-      <div className="safe-inline-area relative z-10 mx-auto grid min-h-[calc(100dvh-4.1rem)] max-w-[110rem] items-end gap-4 pb-5 pt-[35dvh] [--safe-inline-padding:.75rem] sm:[--safe-inline-padding:1.25rem] lg:grid-cols-[18rem_minmax(0,1fr)_19rem] lg:items-stretch lg:pb-5 lg:pt-5">
+      <div className="safe-inline-area absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] top-[calc(3.85rem+env(safe-area-inset-top))] z-10 mx-auto grid max-w-[110rem] items-end gap-4 pt-[48dvh] [--safe-inline-padding:.75rem] sm:[--safe-inline-padding:1.25rem] lg:bottom-0 lg:grid-cols-[18rem_minmax(0,1fr)_19rem] lg:items-stretch lg:pb-5 lg:pt-5">
         <aside className="stone-panel hidden self-end p-4 lg:block" aria-label="משימות">
           <div className="mb-3 flex items-center gap-2 text-[#f0cf82]"><ScrollText className="size-5" aria-hidden="true" /><h2 className="display-font text-xl">יומן המשימה</h2></div>
           {activeQuest && activeQuestState ? (
@@ -148,24 +160,45 @@ export function GameScene({
           ) : <p className="text-sm text-[#9e968a]">אין משימה פעילה. כדאי לדבר עם אנשי הכפר.</p>}
         </aside>
 
-        <section className="stone-panel relative self-end overflow-hidden" aria-labelledby="location-title">
-          <div className="border-b border-[#c6a15b]/18 bg-black/15 p-4 sm:p-5">
-            <div className="mb-2 flex items-center gap-2 text-[#c6a15b]"><Compass className="size-4" aria-hidden="true" /><span className="text-xs font-bold tracking-[0.18em]">מיקום נוכחי</span></div>
-            <motion.h1 key={location.id} id="location-title" className="display-font text-3xl text-[#f2dfb0] sm:text-4xl" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>{location.name}</motion.h1>
-            <motion.p key={`${location.id}-description`} className="mt-3 max-w-4xl text-sm leading-7 text-[#c9c0b2] sm:text-base" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{location.description}</motion.p>
+        <section className={`stone-panel scene-action-sheet relative flex max-h-full min-h-0 self-end flex-col overflow-hidden transition-[max-height] duration-200 lg:self-stretch ${mobileDetailsOpen ? "max-h-[58dvh]" : "max-h-[38dvh]"}`} aria-labelledby="location-title">
+          <div className="shrink-0 border-b border-[#c6a15b]/18 bg-black/15 px-3 py-2.5 sm:p-5">
+            <div className="mb-1 flex items-center justify-between gap-3 sm:mb-2">
+              <div className="flex items-center gap-2 text-[#c6a15b]"><Compass className="size-4" aria-hidden="true" /><span className="text-[0.68rem] font-bold tracking-[0.18em] sm:text-xs">מיקום נוכחי</span></div>
+              <button type="button" className="inline-flex min-h-9 items-center gap-1 px-2 text-xs text-[#d9c89f] outline-none hover:text-[#f0cf82] focus-visible:ring-2 focus-visible:ring-[#70c7da] lg:hidden" onClick={() => setExpandedLocationId((current) => current === location.id ? null : location.id)} aria-expanded={mobileDetailsOpen} aria-controls="location-actions">
+                {mobileDetailsOpen ? "צמצום" : "כל הפעולות"}
+                {mobileDetailsOpen ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronUp className="size-4" aria-hidden="true" />}
+              </button>
+            </div>
+            <motion.h1 key={location.id} id="location-title" className="display-font text-[1.65rem] leading-tight text-[#f2dfb0] sm:text-4xl" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>{location.name}</motion.h1>
+            <motion.p key={`${location.id}-description`} className={`${mobileDetailsOpen ? "line-clamp-none" : "line-clamp-2"} mt-1 max-w-4xl text-xs leading-5 text-[#c9c0b2] sm:mt-3 sm:text-base sm:leading-7 lg:line-clamp-none`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{location.description}</motion.p>
           </div>
-          <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4" aria-label="פעולות במקום">
-            {interactions.map((interaction) => (
-              <button key={interaction.id} data-testid={`interaction-${interaction.id}`} className="group min-h-16 border border-white/10 bg-white/[.025] p-3 text-right transition hover:border-[#c6a15b]/55 hover:bg-[#c6a15b]/8" onClick={() => onInteraction(interaction)}>
+
+          {visibleConsequences.length > 0 ? (
+            <div className="shrink-0 border-b border-[#c6a15b]/14 bg-black/20 px-3 py-2 sm:px-4" aria-label="השפעות הבחירות שלך">
+              {visibleConsequences.slice(0, mobileDetailsOpen ? 2 : 1).map((consequence) => (
+                <div key={consequence.key} className={`scene-consequence scene-consequence--${consequence.tone}`}>
+                  <WandSparkles className="size-3.5 shrink-0" aria-hidden="true" />
+                  <p className="min-w-0 text-[0.7rem] leading-4 sm:text-xs"><strong>{consequence.title}:</strong> <span className={`block ${mobileDetailsOpen ? "" : "line-clamp-1"}`}>{consequence.detail}</span></p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div id="location-actions" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="grid gap-1.5 p-2 sm:grid-cols-2 sm:gap-2 sm:p-4" aria-label="פעולות במקום">
+            {interactions.map((interaction, index) => (
+              <button key={interaction.id} data-testid={`interaction-${interaction.id}`} className={`group min-h-12 border border-white/10 bg-white/[.025] px-3 py-2 text-right transition hover:border-[#c6a15b]/55 hover:bg-[#c6a15b]/8 sm:min-h-16 sm:p-3 ${!mobileDetailsOpen && index >= 2 ? "hidden sm:block" : ""}`} onClick={() => onInteraction(interaction)}>
                 <span className="flex items-center gap-2 font-bold text-[#e5dac7] group-hover:text-[#f0cf82]">{interaction.encounterId ? <Swords className="size-4 text-[#d05b54]" aria-hidden="true" /> : interaction.skillCheck ? <Sparkles className="size-4 text-[#62c6df]" aria-hidden="true" /> : <BookOpenText className="size-4 text-[#c6a15b]" aria-hidden="true" />}{interaction.label}</span>
-                <span className="mt-1 block text-xs leading-5 text-[#9f978b]">{interaction.description}</span>
+                <span className={`${mobileDetailsOpen ? "block" : "hidden"} mt-1 text-xs leading-5 text-[#9f978b] sm:block`}>{interaction.description}</span>
               </button>
             ))}
+            {hasHiddenMobileActions ? <button type="button" className="min-h-10 border border-dashed border-[#c6a15b]/35 px-3 text-xs font-bold text-[#d9bf7c] hover:bg-[#c6a15b]/8 sm:hidden" onClick={() => setExpandedLocationId(location.id)}>עוד {interactions.length - 2} פעולות</button> : null}
             {interactions.length === 0 ? <p className="p-3 text-sm text-[#9e968a]">מיצית את החקירה במקום הזה. אפשר להמשיך בדרך.</p> : null}
           </div>
-          <nav className="flex flex-wrap gap-2 border-t border-[#c6a15b]/18 bg-black/25 p-3" aria-label="דרכי יציאה">
+          <nav className="sticky bottom-0 flex flex-wrap gap-1.5 border-t border-[#c6a15b]/18 bg-[#090b0e]/96 p-2 backdrop-blur sm:gap-2 sm:p-3" aria-label="דרכי יציאה">
             {exits.map((exit) => <GameButton key={exit.destinationId} variant="secondary" size="sm" onClick={() => onTravel(exit)} data-testid={`travel-${exit.destinationId}`}><Footprints className="size-4" aria-hidden="true" />{exit.label}<ChevronLeft className="size-4" aria-hidden="true" /></GameButton>)}
           </nav>
+          </div>
         </section>
 
         <aside className="stone-panel hidden self-end p-4 lg:block" aria-label="מידע על הדמות">

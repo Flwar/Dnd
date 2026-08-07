@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowUp, Sparkles } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -15,7 +15,6 @@ type OutcomeTheme = {
   announcement: string;
   accent: string;
   bright: string;
-  dark: string;
   glow: string;
   textClass: string;
   revealSound: SoundCue;
@@ -26,7 +25,12 @@ type Vector3 = readonly [number, number, number];
 type FaceGeometry = {
   matrix: string;
   translation: string;
-  light: number;
+  normal: Vector3;
+};
+
+type FaceStyle = CSSProperties & {
+  "--face-light": number;
+  "--face-specular": number;
 };
 
 const outcomes: Record<DiceResult["outcome"], OutcomeTheme> = {
@@ -35,7 +39,6 @@ const outcomes: Record<DiceResult["outcome"], OutcomeTheme> = {
     announcement: "הצלחה מכרעת! הגורל נוטה לטובתך.",
     accent: "#f4cf73",
     bright: "#fff5b8",
-    dark: "#4f3210",
     glow: "rgba(244, 207, 115, 0.72)",
     textClass: "text-[#ffe28f]",
     revealSound: "critical",
@@ -45,7 +48,6 @@ const outcomes: Record<DiceResult["outcome"], OutcomeTheme> = {
     announcement: "בדיקת המיומנות הצליחה.",
     accent: "#77d89a",
     bright: "#d8ffe4",
-    dark: "#123d2b",
     glow: "rgba(119, 216, 154, 0.55)",
     textClass: "text-[#9ce8b5]",
     revealSound: "confirm",
@@ -55,7 +57,6 @@ const outcomes: Record<DiceResult["outcome"], OutcomeTheme> = {
     announcement: "בדיקת המיומנות נכשלה.",
     accent: "#e56c65",
     bright: "#ffd1c7",
-    dark: "#4d161b",
     glow: "rgba(229, 108, 101, 0.55)",
     textClass: "text-[#f19a91]",
     revealSound: "damage",
@@ -65,22 +66,10 @@ const outcomes: Record<DiceResult["outcome"], OutcomeTheme> = {
     announcement: "כישלון מכריע. הגורל פנה נגדך.",
     accent: "#dc5364",
     bright: "#ffb8c0",
-    dark: "#360914",
     glow: "rgba(220, 83, 100, 0.7)",
     textClass: "text-[#ff8d9b]",
     revealSound: "critical",
   },
-};
-
-const rollingTheme: OutcomeTheme = {
-  label: "",
-  announcement: "",
-  accent: "#74b7c9",
-  bright: "#d8f7ff",
-  dark: "#132f3b",
-  glow: "rgba(96, 194, 220, 0.5)",
-  textClass: "text-[#d8f7ff]",
-  revealSound: "dice",
 };
 
 const particleVectors = [
@@ -154,29 +143,123 @@ function buildFaceGeometry(): readonly FaceGeometry[] {
     return {
       matrix,
       translation: `translate3d(${rounded(centre[0])}em,${rounded(centre[1])}em,${rounded(centre[2])}em)`,
-      light: Math.max(0.42, Math.min(1.08, 0.7 + outward[2] * 0.28 - outward[0] * 0.08)),
+      normal: outward,
     };
   });
 }
 
 const faces = buildFaceGeometry();
+const worldLightDirection = normalize([-0.58, -0.72, 0.82]);
+const halfVector = normalize(add(worldLightDirection, [0, 0, 1]));
+
+function rotateNormal(normal: Vector3, rotateX: number, rotateY: number, rotateZ: number): Vector3 {
+  const xRadians = rotateX * Math.PI / 180;
+  const yRadians = rotateY * Math.PI / 180;
+  const zRadians = rotateZ * Math.PI / 180;
+  const cosX = Math.cos(xRadians);
+  const sinX = Math.sin(xRadians);
+  const cosY = Math.cos(yRadians);
+  const sinY = Math.sin(yRadians);
+  const cosZ = Math.cos(zRadians);
+  const sinZ = Math.sin(zRadians);
+
+  const afterX: Vector3 = [
+    normal[0],
+    normal[1] * cosX - normal[2] * sinX,
+    normal[1] * sinX + normal[2] * cosX,
+  ];
+  const afterY: Vector3 = [
+    afterX[0] * cosY + afterX[2] * sinY,
+    afterX[1],
+    -afterX[0] * sinY + afterX[2] * cosY,
+  ];
+  return [
+    afterY[0] * cosZ - afterY[1] * sinZ,
+    afterY[0] * sinZ + afterY[1] * cosZ,
+    afterY[2],
+  ];
+}
+
+function faceLighting(normal: Vector3, rotateX = 0, rotateY = 0, rotateZ = 0) {
+  const worldNormal = rotateNormal(normal, rotateX, rotateY, rotateZ);
+  const diffuse = Math.max(0, dot(worldNormal, worldLightDirection));
+  const cameraFacing = Math.max(0, worldNormal[2]);
+  const specular = Math.pow(Math.max(0, dot(worldNormal, halfVector)), 20);
+  return {
+    brightness: Math.max(0.34, Math.min(1.08, 0.36 + diffuse * 0.58 + cameraFacing * 0.1)),
+    specular: Math.min(0.5, specular * 0.46),
+  };
+}
+
+function findOppositeFaceIndices(): readonly number[] {
+  return faces.map((face, index) => {
+    let oppositeIndex = index;
+    let smallestDot = Number.POSITIVE_INFINITY;
+    faces.forEach((candidate, candidateIndex) => {
+      const normalDot = dot(face.normal, candidate.normal);
+      if (normalDot < smallestDot) {
+        smallestDot = normalDot;
+        oppositeIndex = candidateIndex;
+      }
+    });
+    return oppositeIndex;
+  });
+}
+
+const oppositeFaceIndices = findOppositeFaceIndices();
+
+// Every opposing pair on a standard d20 totals 21. We keep that physical rule
+// while rotating which engraved face lands in front for the authoritative roll.
+function faceValuesForRoll(value: number, seed: number): readonly number[] {
+  const faceValues = Array<number>(20).fill(0);
+  const assigned = new Set<number>();
+  const frontOpposite = oppositeFaceIndices[0];
+  faceValues[0] = value;
+  faceValues[frontOpposite] = 21 - value;
+  assigned.add(0);
+  assigned.add(frontOpposite);
+
+  const selectedPair = Math.min(value, 21 - value);
+  const remainingPairs = Array.from({ length: 10 }, (_, index) => [index + 1, 20 - index] as const)
+    .filter(([low]) => low !== selectedPair);
+  const offset = Math.abs(seed) % remainingPairs.length;
+  const orderedPairs = [...remainingPairs.slice(offset), ...remainingPairs.slice(0, offset)];
+  let pairIndex = 0;
+
+  for (let faceIndex = 1; faceIndex < faces.length; faceIndex += 1) {
+    if (assigned.has(faceIndex)) continue;
+    const oppositeIndex = oppositeFaceIndices[faceIndex];
+    const [low, high] = orderedPairs[pairIndex];
+    const reverse = Math.abs(seed + faceIndex * 37) % 2 === 1;
+    faceValues[faceIndex] = reverse ? high : low;
+    faceValues[oppositeIndex] = reverse ? low : high;
+    assigned.add(faceIndex);
+    assigned.add(oppositeIndex);
+    pairIndex += 1;
+  }
+
+  return faceValues;
+}
 
 function D20Model({
   value,
-  theme,
+  seed,
   settled,
   selected,
   dual,
+  registerFace,
 }: {
   value: number;
-  theme: OutcomeTheme;
+  seed: number;
   settled: boolean;
   selected: boolean;
   dual: boolean;
+  registerFace: (index: number, element: HTMLDivElement | null) => void;
 }) {
   const accessibleLabel = settled
     ? `קוביית עשרים פאות. התוצאה היא ${value}`
     : "קוביית עשרים פאות מתגלגלת";
+  const engravedValues = faceValuesForRoll(value, seed);
 
   return (
     <div
@@ -191,9 +274,11 @@ function D20Model({
       }}
       data-testid="d20-model"
       data-selected={settled ? selected : undefined}
+      data-material="obsidian-bronze"
     >
       {faces.map((face, index) => {
-        const faceStyle: CSSProperties = {
+        const lighting = faceLighting(face.normal);
+        const faceStyle: FaceStyle = {
           position: "absolute",
           left: "50%",
           top: "50%",
@@ -207,43 +292,48 @@ function D20Model({
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
           clipPath: "polygon(50% 0, 100% 100%, 0 100%)",
-          background: theme.bright,
-          filter: `brightness(${face.light})`,
+          background: "linear-gradient(135deg, #8a683e, #47331f 58%, #1a1715)",
+          filter: "brightness(var(--face-light)) saturate(.82)",
+          "--face-light": lighting.brightness,
+          "--face-specular": lighting.specular,
         };
+        const engravedValue = engravedValues[index];
 
         return (
-          <div key={index} aria-hidden="true" data-testid="d20-face" data-face={index + 1} style={faceStyle}>
+          <div
+            key={index}
+            ref={(element) => registerFace(index, element)}
+            aria-hidden="true"
+            data-testid="d20-face"
+            data-face={index + 1}
+            data-face-value={engravedValue}
+            style={faceStyle}
+          >
             <div
               className="absolute inset-[0.28em]"
               style={{
                 clipPath: "polygon(50% 0, 100% 100%, 0 100%)",
-                background: `linear-gradient(145deg, rgba(255,255,255,.32), transparent 30%), radial-gradient(circle at 38% 30%, ${theme.accent}, ${theme.dark} 78%)`,
-                boxShadow: "inset 0 0 1.1em rgba(255,255,255,.16), inset 0 -1.5em 2.4em rgba(0,0,0,.38)",
+                background: "radial-gradient(circle at 50% 48%,rgba(83,77,68,.42),transparent 58%),repeating-linear-gradient(27deg,rgba(255,255,255,.022) 0 .08em,transparent .08em .72em),linear-gradient(160deg,#252627,#111416 62%,#07090a)",
+                boxShadow: "inset 0 0 1.1em rgba(197,151,83,.1), inset 0 -1.8em 2.8em rgba(0,0,0,.52)",
               }}
             />
-            {index === 0 && settled ? (
-              <span
-                data-testid="d20-front-value"
-                className="absolute left-1/2 top-2/3 grid size-[7em] place-items-center rounded-full border-[0.22em] font-sans text-[5.2em] font-black leading-none text-[#fffdf2] [text-shadow:0_0.08em_0.08em_#080707,0_0_0.32em_rgba(0,0,0,.8)]"
-                style={{
-                  borderColor: `${theme.bright}99`,
-                  background: "rgba(7, 10, 12, .26)",
-                  transform: "translate(-50%, -50%) translateZ(0.45em)",
-                  boxShadow: `0 0 1.1em ${theme.glow}, inset 0 0 .8em rgba(0,0,0,.35)`,
-                }}
-              >
-                <bdi>{value}</bdi>
-              </span>
-            ) : null}
+            <div
+              className="absolute inset-[0.28em] bg-[radial-gradient(circle_at_50%_42%,rgba(255,229,176,.52),transparent_58%)]"
+              style={{
+                clipPath: "polygon(50% 0, 100% 100%, 0 100%)",
+                opacity: "var(--face-specular)",
+              }}
+            />
+            <span
+              data-testid={index === 0 && settled ? "d20-front-value" : "d20-face-number"}
+              className={`absolute left-1/2 top-2/3 grid min-w-[5em] -translate-x-1/2 -translate-y-1/2 place-items-center font-sans font-black leading-none text-[#c49a5d] [text-shadow:0_-0.045em_0_rgba(255,224,164,.22),0_0.085em_0.08em_rgba(0,0,0,.96)] ${engravedValue >= 10 ? "text-[3.9em]" : "text-[4.7em]"}`}
+              style={{ transform: "translate(-50%, -50%) translateZ(0.42em)" }}
+            >
+              <bdi>{engravedValue}</bdi>
+            </span>
           </div>
         );
       })}
-
-      <span
-        aria-hidden="true"
-        className="absolute start-[12%] top-[82%] h-[8%] w-[76%] rounded-[50%] blur-[1.5em]"
-        style={{ background: theme.glow, transform: "translateZ(-18em) rotateX(78deg)" }}
-      />
     </div>
   );
 }
@@ -326,31 +416,81 @@ function AnimatedDie({
 }) {
   const direction = index % 2 === 0 ? 1 : -1;
   const variation = Math.abs(seed + index * 137) % 4;
+  const faceElements = useRef<Array<HTMLDivElement | null>>([]);
+  const registerFace = useCallback((faceIndex: number, element: HTMLDivElement | null) => {
+    faceElements.current[faceIndex] = element;
+  }, []);
+  const updateFaceLighting = useCallback((rotateX: number, rotateY: number, rotateZ: number) => {
+    faces.forEach((face, faceIndex) => {
+      const element = faceElements.current[faceIndex];
+      if (!element) return;
+      const lighting = faceLighting(face.normal, rotateX, rotateY, rotateZ);
+      element.style.setProperty("--face-light", String(lighting.brightness));
+      element.style.setProperty("--face-specular", String(lighting.specular));
+    });
+  }, []);
+
+  useEffect(() => {
+    if (settled || reducedMotion) {
+      updateFaceLighting(0, 0, 0);
+      return;
+    }
+    updateFaceLighting(-105 * direction, (135 + variation * 24) * direction, -32 * direction);
+  }, [direction, reducedMotion, settled, updateFaceLighting, variation]);
+
+  const numericMotionValue = (value: unknown) => {
+    if (typeof value === "number") return value;
+    const parsed = Number.parseFloat(String(value ?? 0));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
 
   return (
-    <div className="relative grid shrink-0 place-items-center [perspective:900px]" data-testid="animated-die">
-      {selected ? (
+    <div className="relative z-10 grid shrink-0 place-items-center [perspective:900px]" data-testid="animated-die">
+      <span aria-hidden="true" className="absolute bottom-[7%] left-1/2 z-0 h-[7%] w-[62%] -translate-x-1/2">
+        <motion.span
+          data-testid="d20-ground-shadow"
+          className="block size-full rounded-[50%] bg-black/85 blur-[0.65rem]"
+          initial={reducedMotion ? false : { opacity: 0.24, scaleX: 0.58, scaleY: 0.54 }}
+          animate={settled || reducedMotion ? {
+            opacity: selected ? 0.76 : 0.56,
+            scaleX: selected ? 1 : 0.84,
+            scaleY: selected ? 0.72 : 0.62,
+          } : {
+            opacity: [0.24, 0.66, 0.34, 0.74],
+            scaleX: [0.58, 1.04, 0.74, 1],
+            scaleY: [0.54, 0.8, 0.6, 0.72],
+          }}
+          transition={settled || reducedMotion
+            ? { duration: reducedMotion ? 0.01 : 0.18, ease: "easeOut" }
+            : { duration: 1.52, times: [0, 0.38, 0.76, 1], ease: [0.2, 0.75, 0.25, 1] }}
+        />
+      </span>
+
+      {selected && settled ? (
         <>
           <motion.span
             aria-hidden="true"
+            data-testid="d20-outcome-halo"
             className="absolute inset-[10%] rounded-full border"
             style={{ borderColor: theme.accent, boxShadow: `0 0 42px ${theme.glow}, inset 0 0 34px ${theme.glow}` }}
             initial={{ opacity: 0, scale: 0.55 }}
-            animate={settled ? { opacity: [0, 0.72, 0], scale: [0.55, 1.36, 1.62] } : { opacity: 0, scale: 0.55 }}
+            animate={{ opacity: [0, 0.72, 0], scale: [0.55, 1.36, 1.62] }}
             transition={{ duration: reducedMotion ? 0.01 : 0.7, ease: "easeOut" }}
           />
           <motion.span
             aria-hidden="true"
             className="absolute inset-[18%] rounded-full blur-2xl"
             style={{ background: theme.glow }}
-            animate={settled ? { opacity: 0.58, scale: 1.05 } : { opacity: [0.18, 0.4, 0.2], scale: [0.76, 1.08, 0.82] }}
-            transition={settled ? { duration: 0.3 } : { duration: 0.55, repeat: Infinity }}
+            initial={{ opacity: 0, scale: 0.78 }}
+            animate={{ opacity: 0.5, scale: 1.04 }}
+            transition={{ duration: reducedMotion ? 0.01 : 0.3 }}
           />
           <RollParticles theme={theme} outcome={outcome} settled={settled} reducedMotion={reducedMotion} />
         </>
       ) : null}
 
       <motion.div
+        data-testid="d20-rotating-body"
         className="relative z-10 will-change-transform"
         style={{ transformStyle: "preserve-3d" }}
         initial={reducedMotion ? false : {
@@ -378,8 +518,13 @@ function AnimatedDie({
         transition={settled || reducedMotion
           ? { duration: reducedMotion ? 0.01 : 0.18, ease: "easeOut" }
           : { duration: 1.52, times: [0, 0.38, 0.76, 1], ease: [0.2, 0.75, 0.25, 1] }}
+        onUpdate={(latest) => updateFaceLighting(
+          numericMotionValue(latest.rotateX),
+          numericMotionValue(latest.rotateY),
+          numericMotionValue(latest.rotateZ),
+        )}
       >
-        <D20Model value={value} theme={theme} settled={settled} selected={selected} dual={dual} />
+        <D20Model value={value} seed={seed} settled={settled} selected={selected} dual={dual} registerFace={registerFace} />
       </motion.div>
 
       {dual && settled ? (
@@ -409,7 +554,6 @@ function DiceRollResult({
   const [settled, setSettled] = useState(reducedMotion);
   const revealSoundPlayed = useRef(false);
   const critical = result.outcome === "critical-success" || result.outcome === "critical-failure";
-  const shownTheme = settled ? outcomeTheme : rollingTheme;
   const displayedRolls = result.mode === "normal" ? [result.selectedRoll] : result.rolls.slice(0, 2);
   const selectedIndex = Math.max(0, displayedRolls.findIndex((roll) => roll === result.selectedRoll));
   const dual = displayedRolls.length > 1;
@@ -435,6 +579,15 @@ function DiceRollResult({
         data-testid="dice-stage"
         data-dice-count={displayedRolls.length}
       >
+        <div
+          aria-hidden="true"
+          data-testid="dice-stone-surface"
+          className="pointer-events-none absolute inset-x-[-0.75rem] bottom-[-7%] z-0 h-[46%] overflow-hidden rounded-[50%] border-t border-[#8d7350]/35 bg-[radial-gradient(ellipse_at_50%_24%,rgba(137,116,84,.22),transparent_48%),repeating-linear-gradient(168deg,rgba(255,255,255,.018)_0_1px,transparent_1px_13px),linear-gradient(180deg,#272521,#0c0d0e_78%)] shadow-[inset_0_12px_28px_rgba(255,220,160,.025),0_-5px_30px_rgba(0,0,0,.45)]"
+          style={{ transform: "perspective(520px) rotateX(64deg)", transformOrigin: "50% 100%" }}
+        >
+          <span className="absolute inset-x-[12%] top-[18%] h-px rotate-[-4deg] bg-gradient-to-r from-transparent via-black/70 to-transparent" />
+          <span className="absolute start-[25%] top-[30%] h-px w-[46%] rotate-[7deg] bg-black/55" />
+        </div>
         {displayedRolls.map((roll, index) => (
           <AnimatedDie
             key={`${index}-${roll}`}
@@ -443,7 +596,7 @@ function DiceRollResult({
             selected={index === selectedIndex}
             settled={settled}
             reducedMotion={reducedMotion}
-            theme={shownTheme}
+            theme={outcomeTheme}
             outcome={result.outcome}
             seed={result.seed}
             dual={dual}

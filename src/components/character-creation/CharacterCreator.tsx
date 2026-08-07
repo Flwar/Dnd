@@ -183,7 +183,56 @@ function RaceStep({ selected, onSelect }: { selected: RaceId; onSelect: (id: Rac
 
 function ClassStep({ selected, isKing, onSelect }: { selected: ClassId; isKing: boolean; onSelect: (id: ClassId) => void }) {
   const availableClasses = isKing ? characterClasses : characterClasses.filter((entry) => entry.id !== "king");
-  return <div><StepHeading title="דרך הלחימה" text="כל מקצוע משתמש במשאב ובמערכת יכולות שונים — לא רק בשם אחר לאותה התקפה." />{isKing ? <p className="mb-4 flex items-center gap-2 border border-[#f0cf82]/40 bg-[#c6a15b]/12 px-4 py-3 text-sm text-[#ffe7a6]"><Sparkles className="size-4" aria-hidden="true" />המקצוע המלכותי נפתח לחשבון בעל סמכות הכתר בלבד.</p> : null}<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">{availableClasses.map((entry) => <ChoiceCard key={entry.id} selected={selected === entry.id} onClick={() => onSelect(entry.id)} title={entry.name} badge={entry.id === "king" ? "בלעדי · נושא הכתר" : difficultyLabels[entry.difficulty]}><div className="mb-3 flex gap-2" aria-label={`יכולות הפתיחה של ${entry.name}`}>{entry.startingAbilityIds.map((abilityId) => { const ability = abilitiesById[abilityId]; return <div key={abilityId} className="relative aspect-square flex-1 overflow-hidden border border-white/10" title={ability.name}><Image src={getAssetPath(ability.iconAssetKey)} alt={ability.name} fill sizes="80px" className="object-cover" /></div>; })}</div><p className="text-[#d3cabb]">{entry.role}</p><dl className="mt-3 grid grid-cols-2 gap-2 text-sm"><div><dt className="text-[#8f877a]">חיים</dt><dd><bdi className="ltr-isolate">{entry.startingHealth}</bdi></dd></div><div><dt className="text-[#8f877a]">משאב</dt><dd>{resourceLabels[entry.resourceType]}</dd></div></dl><p className="mt-3 text-sm"><b>חוזקות:</b> {entry.strengths.join(" · ")}</p><p className="mt-1 text-sm text-[#a89f91]"><b>חולשות:</b> {entry.weaknesses.join(" · ")}</p></ChoiceCard>)}</div></div>;
+  return (
+    <div>
+      <StepHeading title="דרך הלחימה" text="כל מקצוע משתמש במשאב ובמערכת יכולות שונים — לא רק בשם אחר לאותה התקפה." />
+      {isKing ? (
+        <p className="mb-4 flex items-center gap-2 border border-[#f0cf82]/40 bg-[#c6a15b]/12 px-4 py-3 text-sm text-[#ffe7a6]">
+          <Sparkles className="size-4" aria-hidden="true" />
+          המקצוע המלכותי נפתח לחשבון בעל סמכות הכתר בלבד.
+        </p>
+      ) : null}
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {availableClasses.map((entry) => (
+          <ChoiceCard
+            key={entry.id}
+            selected={selected === entry.id}
+            onClick={() => onSelect(entry.id)}
+            title={entry.name}
+            badge={entry.id === "king" ? "בלעדי · נושא הכתר" : difficultyLabels[entry.difficulty]}
+          >
+            <div className="relative mb-3 aspect-video overflow-hidden border border-[#c6a15b]/20 bg-[#090a0b]">
+              <Image
+                src={getAssetPath(entry.previewAssetKey)}
+                alt={`איור מקצוע מלא של ${entry.name}`}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                className="object-cover transition-transform duration-300 group-hover:scale-[1.015]"
+              />
+              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" aria-hidden="true" />
+            </div>
+            <div className="mb-3 flex gap-2" aria-label={`יכולות הפתיחה של ${entry.name}`}>
+              {entry.startingAbilityIds.map((abilityId) => {
+                const ability = abilitiesById[abilityId];
+                return (
+                  <div key={abilityId} className="relative aspect-square flex-1 overflow-hidden border border-white/10" title={ability.name}>
+                    <Image src={getAssetPath(ability.iconAssetKey)} alt={ability.name} fill sizes="80px" className="object-cover" />
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[#d3cabb]">{entry.role}</p>
+            <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <div><dt className="text-[#8f877a]">חיים</dt><dd><bdi className="ltr-isolate">{entry.startingHealth}</bdi></dd></div>
+              <div><dt className="text-[#8f877a]">משאב</dt><dd>{resourceLabels[entry.resourceType]}</dd></div>
+            </dl>
+            <p className="mt-3 text-sm"><b>חוזקות:</b> {entry.strengths.join(" · ")}</p>
+            <p className="mt-1 text-sm text-[#a89f91]"><b>חולשות:</b> {entry.weaknesses.join(" · ")}</p>
+          </ChoiceCard>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function BackgroundStep({ selected, onSelect }: { selected: BackgroundId; onSelect: (id: BackgroundId) => void }) {
@@ -209,7 +258,7 @@ function SummaryStep({ draft, portraitUrl, attributes, derived }: { draft: Chara
 }
 
 function ChoiceCard({ selected, onClick, title, badge, children }: { selected: boolean; onClick: () => void; title: string; badge: string; children: React.ReactNode }) {
-  return <button onClick={onClick} aria-pressed={selected} className={`relative min-h-48 border p-4 text-start transition-[transform,border-color,background] hover:-translate-y-0.5 ${selected ? "border-[#f0cf82] bg-[#c6a15b]/12" : "border-white/10 bg-black/20 hover:border-[#c6a15b]/45"}`}>{selected ? <Check className="absolute end-3 top-3 size-5 text-[#f0cf82]" aria-hidden="true" /> : null}<h3 className="display-font pe-8 text-2xl text-[#f0cf82]">{title}</h3><span className="my-2 inline-block border border-[#62c6df]/30 bg-[#62c6df]/8 px-2 py-1 text-xs text-[#b7dce4]">{badge}</span><div className="text-sm leading-6 text-[#b9ad9c]">{children}</div></button>;
+  return <button onClick={onClick} aria-pressed={selected} className={`group relative min-h-48 border p-4 text-start transition-[transform,border-color,background] hover:-translate-y-0.5 ${selected ? "border-[#f0cf82] bg-[#c6a15b]/12" : "border-white/10 bg-black/20 hover:border-[#c6a15b]/45"}`}>{selected ? <Check className="absolute end-3 top-3 z-10 size-5 text-[#f0cf82]" aria-hidden="true" /> : null}<h3 className="display-font pe-8 text-2xl text-[#f0cf82]">{title}</h3><span className="my-2 inline-block border border-[#62c6df]/30 bg-[#62c6df]/8 px-2 py-1 text-xs text-[#b7dce4]">{badge}</span><div className="text-sm leading-6 text-[#b9ad9c]">{children}</div></button>;
 }
 
 function skillLabel(skill: string) {

@@ -63,6 +63,16 @@ describe("הצגת גלגול קוביית d20", () => {
     expect(screen.getByTestId("dice-stage")).toHaveAttribute("data-dice-count", "1");
     expect(screen.getAllByTestId("d20-face")).toHaveLength(20);
     expect(screen.getByTestId("d20-front-value")).toHaveTextContent("17");
+    expect(screen.getAllByTestId("d20-face-number")).toHaveLength(19);
+    expect(screen.getByTestId("d20-model")).toHaveAttribute("data-material", "obsidian-bronze");
+    expect(screen.getByTestId("dice-stone-surface")).toBeInTheDocument();
+    const engravedValues = screen.getAllByTestId("d20-face").map((face) => Number(face.dataset.faceValue)).sort((a, b) => a - b);
+    expect(engravedValues).toEqual(Array.from({ length: 20 }, (_, index) => index + 1));
+
+    const shadow = screen.getByTestId("d20-ground-shadow");
+    const rotatingBody = screen.getByTestId("d20-rotating-body");
+    expect(rotatingBody).not.toContainElement(shadow);
+    expect(rotatingBody.parentElement).toBe(shadow.parentElement?.parentElement);
   });
 
   it("מבדילה בין יתרון לחיסרון ומציגה את שתי ההטלות", () => {
@@ -122,6 +132,7 @@ describe("הצגת גלגול קוביית d20", () => {
     expect(screen.getByText("הקובייה מתגלגלת…")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).not.toHaveTextContent("תוצאה סופית: 21");
     expect(screen.queryByTestId("d20-front-value")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("d20-outcome-halo")).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "קוביית עשרים פאות מתגלגלת" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "דלג לתוצאה" }));
 
@@ -129,5 +140,6 @@ describe("הצגת גלגול קוביית d20", () => {
     expect(screen.getByRole("button", { name: "המשך" })).toBeInTheDocument();
     expect(screen.getByText("הצלחה")).toBeInTheDocument();
     expect(screen.getByTestId("d20-front-value")).toHaveTextContent("17");
+    expect(screen.getByTestId("d20-outcome-halo")).toBeInTheDocument();
   });
 });

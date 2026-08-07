@@ -8,11 +8,11 @@ The repository is designed for Next.js on Vercel or Cloudflare Workers through O
 
 - Hebrew account registration, login, logout, recovery, and password-reset flows backed by Supabase Auth.
 - Protected menu and character routes using server-validated Supabase sessions.
-- A seven-step character creator with six races, six classes, seven backgrounds, point buy, local draft resilience, and authoritative database creation.
-- Authored opening-chapter content for ערפלון: locations, NPCs, dialogue branches, quests, items, encounters, a boss, and chapter scenes.
+- A seven-step character creator with six races, six public classes, the account-bound King class, seven backgrounds, point buy, portrait upload, local draft resilience, and authoritative database creation.
+- Authored 70–120 minute opening-chapter content for ערפלון: 16 explorable locations across 13 story scenes, reactive NPCs, branching consequences, quests, items, two regular encounters, a scaled tactical boss, and a return-to-village resolution.
 - Shared TypeScript rules for character building, d20 checks, inventory and equipment, quests, progression, combat, save migration, and party-command validation.
 - PostgreSQL migrations with relational character state, versioned save snapshots, party sessions, command/event streams, idempotent rewards, indexes, constraints, and RLS.
-- Local generated WebP art for scenes, portraits, abilities, and items. See [ASSET_CREDITS.md](./ASSET_CREDITS.md).
+- Local art-directed WebP art for every scene, race portrait, NPC portrait, class preview, King ability, and content icon—with an automated no-placeholder contract. See [ASSET_CREDITS.md](./ASSET_CREDITS.md).
 - Responsive Hebrew game UI components, reduced-motion support, local fonts, and a browser-safe procedural Web Audio manager.
 - Vitest, React Testing Library, pgTAP-style SQL security checks, and Playwright configuration.
 
@@ -22,7 +22,7 @@ Detailed boundaries and data flows are in [ARCHITECTURE.md](./ARCHITECTURE.md). 
 
 The application, database migration, deterministic game rules, authored chapter, server actions, Supabase adapters, Realtime subscriptions, Vercel workflow, and Cloudflare OpenNext configuration are implemented in source. `npm run db:validate` can verify migration loading, seed loading, character creation, transactional relational save synchronization, and idempotent save replay without Docker.
 
-The repository deliberately contains no live Supabase project, SMTP, Vercel, or Cloudflare credentials. Therefore a successful local build does **not** prove hosted email delivery, cloud persistence under real JWTs, RLS between two users, Realtime reconnection, or an actual production deployment. The final release report must record the commands and hosted flows that were really exercised; absent target credentials, describe those flows as implemented but externally unverified.
+Release 1.2.0 is deployed on Vercel at [shattered-crown-il.vercel.app](https://shattered-crown-il.vercel.app). The public menu, registration validation, responsive mobile shell, authenticated saved-character continuation, King account presentation, and production asset delivery were exercised in real browsers on that deployment. Runtime credentials remain managed outside Git. Fresh confirmation-email delivery and the complete two-user Realtime party flow still require an isolated hosted release test and must not be inferred from a successful build.
 
 ## Stack
 
@@ -217,6 +217,8 @@ Set `PLAYWRIGHT_BASE_URL` to exercise an already-running preview or deployed ori
 
 ## Deploying to Vercel
 
+The current production release is **1.2.0** at [shattered-crown-il.vercel.app](https://shattered-crown-il.vercel.app). The instructions below describe how to reproduce or replace that deployment without committing its credentials.
+
 Provision and migrate Supabase first. The Vercel Supabase Marketplace integration supplies `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and PostgreSQL connection variables automatically. If configuring the project manually, add the same variables for Preview and Production and keep all secret/database values server-only.
 
 To apply committed migrations to a hosted project from a trusted administrative environment, set `RUN_HOSTED_MIGRATIONS=1` and provide `SUPABASE_DB_URL` or Vercel Marketplace's `POSTGRES_URL_NON_POOLING`, then run `npm run db:push:hosted`. The script does nothing unless the explicit guard is enabled, performs a dry-run preflight, uses the pinned local CLI, and redacts the connection URL from child-process output. Standalone Node scripts do not load `.env.local` automatically; export the values in the trusted shell or run through an environment-aware deployment job.
@@ -300,21 +302,22 @@ After the first deployment, add `https://YOUR_WORKER_OR_DOMAIN/auth/callback` to
 
 ## Known release limitations
 
-- The repository does not provision a Supabase project, custom SMTP provider, DNS, Vercel project, Cloudflare account, or production secrets.
+- The connected Supabase and Vercel resources are external to the repository; their credentials, SMTP configuration, DNS, and production secrets are intentionally not committed.
 - Complete online party resolution and chapter rewards require the server-only Supabase secret key (or legacy service-role key). The public key alone is intentionally insufficient.
 - The MVP voting rule has no authoritative countdown: each member votes and the leader breaks a tie.
 - Audio is currently generated procedurally through Web Audio; no recorded ambience or licensed sound pack is shipped.
 - Cloudflare R2 incremental caching is not configured. Current authenticated game routes are dynamic and persistent game data remains in Supabase.
 - OpenNext's native Windows toolchain can be less reliable than Linux; use WSL or Linux CI for the release build if `cf:build` fails for a platform-path reason.
 - Live single-player and two-user party Playwright flows are skipped when their isolated account variables are absent. A skipped live test is not a hosted verification pass.
+- Release 1.2.0 passed the OpenNext/Wrangler production-bundle dry run, but it has not been uploaded to Cloudflare because this workstation has no authenticated Wrangler account or scoped `CLOUDFLARE_API_TOKEN`.
 
 ## Verification boundary
 
-The repository does not contain live Supabase, Vercel, or Cloudflare credentials. Consequently, hosted registration email delivery, cloud persistence, RLS under real JWTs, Realtime behavior across two remote clients, and production hosting require external verification after credentials are supplied. Local deterministic tests, `db:validate`, `next build`, and `cf:build` reduce risk but do not replace that release check.
+The repository does not contain live Supabase, Vercel, or Cloudflare credentials. Vercel production hosting and one existing authenticated saved-character session were verified for release 1.2.0. Fresh hosted confirmation-email delivery, RLS between two new users, and Realtime behavior across two independent remote clients remain externally unverified. Local deterministic tests, `db:validate`, `next build`, and `cf:dry-run` reduce risk but do not replace those isolated release checks.
 
 ## Content and asset licensing
 
-The rebuilt art pack is stored under `public/assets/rebuild` and addressed by stable manifest keys in `src/lib/assets/manifest.ts`. It is loaded locally rather than hotlinked. Review [ASSET_CREDITS.md](./ASSET_CREDITS.md) before commercial distribution and update it whenever an asset is added or replaced.
+The release art pack is stored under `public/assets/art-v2` (with retained original UI vectors under `public/assets/rebuild`) and addressed by stable manifest keys in `src/lib/assets/manifest.ts`. It is loaded locally rather than hotlinked. Source masters and the repeatable WebP build scripts live under `assets/art-v2` and `scripts`. Automated integrity tests reject placeholder, temporary, missing, or silhouette-labelled manifest entries. Review [ASSET_CREDITS.md](./ASSET_CREDITS.md) before commercial distribution and update it whenever an asset is added or replaced.
 
 ## License
 

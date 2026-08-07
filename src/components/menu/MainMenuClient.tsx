@@ -51,7 +51,7 @@ export function MainMenuClient({
 
   return (
     <main id="main-content" className="screen-shell flex min-h-dvh items-center px-4 py-8 sm:px-8 lg:px-[7vw]" style={{ overflowY: "auto" }}>
-      <Atmosphere image={getAssetPath("background-menu-cinematic")} priority />
+      <Atmosphere image={getAssetPath("background-menu-cinematic")} mobileImage={getAssetPath("background-menu-cinematic-mobile")} priority />
       <motion.section className="relative z-10 w-full max-w-3xl" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
         <div className="mb-7">
           <button className="mb-2 flex flex-wrap items-center gap-2 text-sm text-[#b9ad9c] hover:text-[#f0cf82]" onClick={() => router.push("/profile")}>

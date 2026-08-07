@@ -7,7 +7,7 @@ import { getAssetPath } from "@/lib/assets/manifest";
 export function AuthFrame({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <main id="main-content" className="screen-shell grid min-h-dvh place-items-center px-4 py-10 sm:px-6">
-      <Atmosphere image={getAssetPath("background-menu-cinematic")} priority />
+      <Atmosphere image={getAssetPath("background-menu-cinematic")} mobileImage={getAssetPath("background-menu-cinematic-mobile")} priority />
       <RunePanel className="relative z-10 w-full max-w-md p-6 sm:p-8">
         <Link href="/" className="mb-5 inline-flex items-center gap-2 text-sm text-[#c6a15b] hover:text-[#f0cf82]">
           <Crown className="size-5" aria-hidden="true" />

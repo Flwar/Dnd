@@ -22,7 +22,7 @@ export const characterClasses: CharacterClass[] = [
     strengths: ["שליטה בכל האויבים", "הגנת בעלי ברית", "כריזמה ועוצמה מאגית"],
     weaknesses: ["כוחות הכתר דורשים סמכות", "ניהול תזמון בין התקפה להגנה"],
     recommendedAttributes: ["charisma", "constitution"],
-    previewAssetKey: "item-shattered-king-crown",
+    previewAssetKey: "class-king-preview",
   },
 ];
 

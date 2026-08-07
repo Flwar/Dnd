@@ -3,7 +3,7 @@ import type { ChapterDefinition, SceneDefinition } from "../../types/game";
 export const openingChapter: ChapterDefinition = {
   id: "shadows-beneath-mistvale",
   name: "הצללים שמתחת לערפלון",
-  estimatedMinutes: [45, 90],
+  estimatedMinutes: [70, 120],
   openingNarration: [
     "אלף שנים חלפו מאז התאחדו שבעה שליטים נגד המלך שמעבר לערפל.",
     "הם לא הצליחו להרוג אותו. במקום זאת חישלו את כתר הברית וכבלו אותו בין העולמות.",
@@ -76,7 +76,7 @@ export const openingScenes: SceneDefinition[] = [
     locationId: "mine-road",
     description: "בדיקת הישרדות או תפיסה חושפת עקבות אנשי כת ומונעת מארב; כישלון יוצר עימות חלופי.",
     entryNarration: "העצים נסגרים סביב הדרך. ארבעה זוגות עקבות מופיעים בבוץ באמצע השביל, כאילו בעליהם נפלו מן השמים.",
-    interactionIds: ["track-hooded-figures", "grey-woman-glimpse"],
+    interactionIds: ["track-hooded-figures", "grey-woman-glimpse", "disable-cult-beacon", "read-watchtower-orders", "search-watch-post", "restore-waystone-oath", "use-elric-seal-at-waystones", "listen-to-waystone"],
     requiredFlags: ["ready_to_leave_village"],
     completionConditions: [{ kind: "flag", key: "road_resolved", value: true }],
     nextSceneIds: ["scene-mine-entrance"],
@@ -182,9 +182,9 @@ export const openingScenes: SceneDefinition[] = [
     number: 13,
     title: "מה שהערפל זוכר",
     locationId: "arfelon-square",
-    description: "סיכום החלטות, סודות, כורים שניצלו, קרבות, ניסיון וזמן משחק, לצד רמז לפרק הבא.",
+    description: "חזרה פעילה לכפר: תגובות מירה, תאל וברום, גורל דנור והחלטה פומבית מה לחשוף על הרסיס.",
     entryNarration: "כששבים לערפלון, כל הפעמונים מצלצלים יחד. הרסיס פועם פעם אחת, והערפל בצפון נפתח בצורת דרך.",
-    interactionIds: [],
+    interactionIds: ["speak-mira-return", "speak-thal-return", "speak-brom-return", "report-elric-return-rescued", "report-elric-return-abandoned"],
     requiredFlags: ["vision_seen"],
     completionConditions: [{ kind: "flag", key: "chapter_one_completed", value: true }],
     nextSceneIds: [],
@@ -199,4 +199,7 @@ export const chapterSummaryFields = [
   { id: "secret", label: "החדר הנסתר", flag: "hidden_chamber_open" },
   { id: "guardian", label: "שומר האבן", flag: "guardian_defeated" },
   { id: "voice", label: "תשובתך לקול", flag: "answered_fog_voice" },
+  { id: "waystones", label: "ברית אבני הסף", flag: "waystone_ward_restored" },
+  { id: "beacon", label: "אות מגדל הכת", flag: "tower_beacon_disabled" },
+  { id: "truth", label: "האמת נחשפה לכפר", flag: "shard_truth_revealed" },
 ] as const;

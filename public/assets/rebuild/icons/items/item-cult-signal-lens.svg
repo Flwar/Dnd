@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title">
+  <title id="title">עדשת אות הערפל</title>
+  <defs>
+    <radialGradient id="bg" cx="38%" cy="28%" r="78%">
+      <stop offset="0" stop-color="#353a3b"/><stop offset=".62" stop-color="#15191b"/><stop offset="1" stop-color="#080a0b"/>
+    </radialGradient>
+    <radialGradient id="glass" cx="34%" cy="28%" r="70%">
+      <stop offset="0" stop-color="#b9ced0" stop-opacity=".68"/><stop offset=".45" stop-color="#4e6f72" stop-opacity=".42"/><stop offset="1" stop-color="#10191a" stop-opacity=".86"/>
+    </radialGradient>
+    <filter id="rough" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence baseFrequency=".075" numOctaves="3" seed="17" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.35"/>
+    </filter>
+  </defs>
+  <rect width="160" height="160" rx="8" fill="url(#bg)"/>
+  <path d="M12 34 34 12h92l22 22v92l-22 22H34l-22-22Z" fill="none" stroke="#8f7243" stroke-width="4" opacity=".8"/>
+  <path d="M27 42 42 27h76l15 15v76l-15 15H42l-15-15Z" fill="#111517" stroke="#c3a05c" stroke-width="2" filter="url(#rough)"/>
+  <circle cx="80" cy="75" r="39" fill="url(#glass)" stroke="#b8995e" stroke-width="7"/>
+  <circle cx="80" cy="75" r="30" fill="none" stroke="#243438" stroke-width="3"/>
+  <path d="m52 91 18-19 9 6 13-18 17 11" fill="none" stroke="#b6d4d6" stroke-width="3.5" stroke-linecap="round" opacity=".8"/>
+  <path d="M84 37 77 63l9 14-10 18 7 19" fill="none" stroke="#0a1113" stroke-width="3"/>
+  <path d="m106 104 23 25" stroke="#b8995e" stroke-width="9" stroke-linecap="round"/>
+  <path d="m110 109 19 20" stroke="#3b2a18" stroke-width="3" stroke-linecap="round"/>
+  <path d="M31 124c24-8 39-5 57 3" fill="none" stroke="#70474a" stroke-width="4" opacity=".48"/>
+</svg>

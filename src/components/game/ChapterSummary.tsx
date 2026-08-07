@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Check, Clock3, Crown, Gem, Swords, UserRoundCheck } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { GameButton } from "@/components/ui/GameButton";
+import { ArtDirectedPicture } from "@/components/ui/ArtDirectedPicture";
 import { chapterSummaryFields, openingChapter } from "@/content/chapters/opening";
 import { getAssetPath } from "@/lib/assets/manifest";
 import type { SaveData } from "@/types/game";
@@ -15,8 +16,13 @@ export function ChapterSummary({ open, save, onReturnToMenu, onClose }: { open: 
   const minutes = Math.max(1, Math.round(save.playtimeSeconds / 60));
   return <Modal open={open} title="הפרק הושלם" onClose={onClose} allowClose={false} className="sm:max-w-4xl">
     <div className="relative overflow-hidden border border-[#c6a15b]/30 bg-black/25 p-5 text-center sm:p-8">
-      {/* eslint-disable-next-line @next/next/no-img-element -- generated local chapter art */}
-      <img src={getAssetPath("background-shard-sanctum")} alt="רסיס הכתר מאיר בתוך היכל האבן" className="absolute inset-0 size-full object-cover opacity-20" />
+      <ArtDirectedPicture
+        desktopSrc={getAssetPath("background-shard-sanctum")}
+        mobileSrc={getAssetPath("background-shard-sanctum-mobile")}
+        alt="רסיס הכתר מאיר בתוך היכל האבן"
+        pictureClassName="absolute inset-0"
+        className="opacity-20"
+      />
       <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/90" />
       <div className="relative">
         <motion.div className="mx-auto grid size-20 place-items-center rounded-full border border-[#62c6df]/60 bg-[#13333e]/65 shadow-[0_0_45px_rgba(98,198,223,.35)]" initial={{ scale: 0.5, rotate: -25 }} animate={{ scale: 1, rotate: 0 }}><Crown className="size-10 text-[#9eeaff]" aria-hidden="true" /></motion.div>

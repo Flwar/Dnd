@@ -134,9 +134,16 @@ function statusAccuracyModifier(combatant: Combatant, definitions: Readonly<Reco
   );
 }
 
-function statusDamageMultiplier(combatant: Combatant, definitions: Readonly<Record<string, StatusDefinition>>): number {
+function statusOutgoingDamageMultiplier(combatant: Combatant, definitions: Readonly<Record<string, StatusDefinition>>): number {
   return combatant.statuses.reduce(
     (total, active) => total * Math.pow(definitions[active.statusId]?.damageMultiplier ?? 1, active.stacks),
+    1,
+  );
+}
+
+function statusIncomingDamageMultiplier(combatant: Combatant, definitions: Readonly<Record<string, StatusDefinition>>): number {
+  return combatant.statuses.reduce(
+    (total, active) => total * Math.pow(definitions[active.statusId]?.incomingDamageMultiplier ?? 1, active.stacks),
     1,
   );
 }
@@ -182,7 +189,6 @@ export function createCombatantFromEnemy(
 
 export interface BossScaling {
   healthMultiplier: number;
-  damageMultiplier: number;
   armorBonus: number;
   guardPoints: number;
 }
@@ -191,10 +197,9 @@ export function bossScaling(partySize: number, averageLevel: number): BossScalin
   const members = Math.max(1, Math.min(4, Math.trunc(partySize)));
   const level = Math.max(1, averageLevel);
   return {
-    healthMultiplier: 1 + (members - 1) * 0.62 + (level - 1) * 0.18,
-    damageMultiplier: 1 + (members - 1) * 0.16 + (level - 1) * 0.08,
+    healthMultiplier: 1 + (members - 1) * 0.5 + (level - 1) * 0.15,
     armorBonus: Math.floor((members - 1) / 2) + Math.floor((level - 1) / 2),
-    guardPoints: 2 + members,
+    guardPoints: 2 + Math.ceil((members - 1) / 2),
   };
 }
 
@@ -206,7 +211,6 @@ export function scaleEnemy(enemy: Enemy, partySize: number, averageLevel: number
     ? bossScaling(members, averageLevel)
     : {
         healthMultiplier: 1 + (members - 1) * 0.45 + levelDifference * 0.12,
-        damageMultiplier: 1,
         armorBonus: Math.floor(levelDifference / 2),
         guardPoints: 0,
       };
@@ -274,7 +278,8 @@ function resolveDamageAgainstTarget(
   const rolled = rollFormula(nextState.seed, diceCount, ability.formula.diceSides, ability.formula.flatBonus);
   nextState = { ...nextState, seed: rolled.seed };
   const attributeBonus = ability.formula.attribute ? Math.max(0, attributeModifier(actor.attributes[ability.formula.attribute])) : 0;
-  const rawDamage = Math.max(0, Math.floor((rolled.total + attributeBonus) * statusDamageMultiplier(actor, rules.statuses)));
+  const outgoingDamage = Math.max(0, Math.floor((rolled.total + attributeBonus) * statusOutgoingDamageMultiplier(actor, rules.statuses)));
+  const rawDamage = Math.max(0, Math.floor(outgoingDamage * statusIncomingDamageMultiplier(target, rules.statuses)));
   const amount = calculateArmorMitigation(rawDamage, Math.max(0, targetArmor - 10));
   const currentHealth = Math.max(0, target.currentHealth - amount);
   let nextTarget = { ...target, currentHealth, defeated: currentHealth === 0 };
@@ -289,10 +294,12 @@ function resolveDamageAgainstTarget(
       : `${actor.name} פוגע ב${target.name} וגורם ${amount} נזק.`,
   });
   const guarded = nextTarget.statuses.some((status) => status.statusId === "guarded");
-  if (guarded && rawDamage >= 8 && !nextTarget.defeated) {
+  if (guarded && rawDamage >= 6 && !nextTarget.defeated) {
     nextTarget = applyStatus(
       { ...nextTarget, statuses: nextTarget.statuses.filter((status) => status.statusId !== "guarded") },
-      { statusId: "exposed-rune", duration: 2, sourceCombatantId: actor.id },
+      // The target's turn begins immediately after this hit and ticks statuses
+      // once, so four stored ticks expose the rune for three player turns.
+      { statusId: "exposed-rune", duration: 4, sourceCombatantId: actor.id },
       rules.statuses,
     );
     nextState = appendEvent(nextState, {
@@ -495,7 +502,19 @@ export function submitCombatAction(
     result = resolveAbility(state, actorId, ability, action.targetIds, rules);
   } else if (action.kind === "defend") {
     const defended = applyStatus(actor, { statusId: "defending", duration: 1, sourceCombatantId: actorId }, rules.statuses);
-    result = { ok: true, state: { ...state, combatants: { ...state.combatants, [actorId]: defended } } };
+    result = {
+      ok: true,
+      state: {
+        ...state,
+        combatants: {
+          ...state.combatants,
+          [actorId]: {
+            ...defended,
+            currentResource: Math.min(defended.maximumResource, defended.currentResource + 1),
+          },
+        },
+      },
+    };
   } else if (action.kind === "escape") {
     const roll = rollDie(state.seed, 20);
     const success = roll.roll + actor.initiativeBonus >= 13;
@@ -567,7 +586,12 @@ export function chooseEnemyAction(
 export const BALANCE = {
   tutorialEnemyHealth: 18,
   regularEnemyHealth: 26,
-  bossBaseHealth: 82,
+  bossBaseHealth: 62,
+  bossBaseArmor: 15,
+  bossRuneCrushAverageRawDamage: 15,
+  defendingIncomingDamageMultiplier: 0.5,
+  guardedIncomingDamageMultiplier: 0.8,
+  defendResourceRecovery: 1,
   escapeDifficulty: 13,
   criticalMultiplier: 2,
 } as const;

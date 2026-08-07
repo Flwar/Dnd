@@ -2,6 +2,7 @@ import type { AssetManifestEntry } from "@/types/game";
 
 const GENERATED_LICENSE = "נכס מקורי שנוצר במיוחד עבור הכתר המנופץ באמצעות OpenAI image generation; ללא hotlink וללא רכיבי צד שלישי.";
 const ROOT = "/assets/rebuild";
+const ART_ROOT = "/assets/art-v2";
 
 const backgroundNames = [
   "menu-cinematic",
@@ -12,6 +13,8 @@ const backgroundNames = [
   "healer-hut",
   "headman-house",
   "mine-road",
+  "old-watchtower",
+  "standing-stones",
   "mine-entrance",
   "main-tunnel",
   "abandoned-tool-store",
@@ -21,6 +24,27 @@ const backgroundNames = [
   "guardian-sanctum",
   "shard-sanctum",
 ] as const;
+
+const artDirectedBackgroundNames = new Set<string>([
+  "menu-cinematic",
+  "village-gate",
+  "arfelon-square",
+  "wet-raven-inn",
+  "smithy",
+  "healer-hut",
+  "headman-house",
+  "mine-road",
+  "old-watchtower",
+  "standing-stones",
+  "mine-entrance",
+  "main-tunnel",
+  "abandoned-tool-store",
+  "flooded-passage",
+  "pillar-hall",
+  "hidden-chamber",
+  "guardian-sanctum",
+  "shard-sanctum",
+]);
 
 export const racePortraitKeys = [
   "portrait-human-01", "portrait-human-02", "portrait-human-03", "portrait-human-04", "portrait-human-05",
@@ -38,6 +62,16 @@ const npcPortraitKeys = [
   "portrait-npc-brom",
   "portrait-npc-danor",
   "portrait-npc-grey-woman",
+] as const;
+
+const classPreviewKeys = [
+  "class-fighter-preview",
+  "class-mage-preview",
+  "class-rogue-preview",
+  "class-ranger-preview",
+  "class-cleric-preview",
+  "class-barbarian-preview",
+  "class-king-preview",
 ] as const;
 
 const abilityKeys = [
@@ -68,20 +102,29 @@ const generated = (
   type: AssetManifestEntry["type"],
 ): AssetManifestEntry => ({ key, path, type, source: "generated", license: GENERATED_LICENSE });
 
+const original = (
+  key: string,
+  path: string,
+  type: AssetManifestEntry["type"],
+): AssetManifestEntry => ({ key, path, type, source: "original" });
+
 export const assetManifest: AssetManifestEntry[] = [
   generated("background-social-preview", `${ROOT}/backgrounds/social-preview.webp`, "background"),
   ...backgroundNames.flatMap((name) => [
-    generated(`background-${name}`, `${ROOT}/backgrounds/${name}.webp`, "background"),
-    generated(`background-${name}-mobile`, `${ROOT}/backgrounds/${name}-mobile.webp`, "background"),
+    generated(`background-${name}`, `${artDirectedBackgroundNames.has(name) ? ART_ROOT : ROOT}/backgrounds/${name}.webp`, "background"),
+    generated(`background-${name}-mobile`, `${artDirectedBackgroundNames.has(name) ? ART_ROOT : ROOT}/backgrounds/${name}-mobile.webp`, "background"),
   ]),
-  ...racePortraitKeys.map((key) => generated(key, `${ROOT}/portraits/${key}.webp`, "portrait")),
-  ...npcPortraitKeys.map((key) => generated(key, `${ROOT}/portraits/${key}.webp`, "portrait")),
+  ...racePortraitKeys.map((key) => generated(key, `${ART_ROOT}/portraits/${key}.webp`, "portrait")),
+  ...npcPortraitKeys.map((key) => generated(key, `${ART_ROOT}/portraits/${key}.webp`, "portrait")),
+  ...classPreviewKeys.map((key) => generated(key, `${ART_ROOT}/classes/${key}.webp`, "ui")),
   ...abilityKeys.map((key) => generated(key, `${ROOT}/icons/abilities/${key}.webp`, "ability")),
   ...itemKeys.map((key) => generated(key, `${ROOT}/icons/items/${key}.webp`, "item")),
-  generated("ability-crown-shard-strike", `${ROOT}/icons/abilities/ability-crown-shard-strike.svg`, "ability"),
-  generated("ability-royal-decree", `${ROOT}/icons/abilities/ability-royal-decree.svg`, "ability"),
-  generated("ability-sovereign-aegis", `${ROOT}/icons/abilities/ability-sovereign-aegis.svg`, "ability"),
-  generated("item-shattered-king-crown", `${ROOT}/icons/items/item-shattered-king-crown.svg`, "item"),
+  generated("ability-crown-shard-strike", `${ART_ROOT}/icons/ability-crown-shard-strike.webp`, "ability"),
+  generated("ability-royal-decree", `${ART_ROOT}/icons/ability-royal-decree.webp`, "ability"),
+  generated("ability-sovereign-aegis", `${ART_ROOT}/icons/ability-sovereign-aegis.webp`, "ability"),
+  generated("item-shattered-king-crown", `${ART_ROOT}/icons/item-shattered-king-crown.webp`, "item"),
+  original("item-cult-signal-lens", `${ROOT}/icons/items/item-cult-signal-lens.svg`, "item"),
+  original("item-waystone-splinter", `${ROOT}/icons/items/item-waystone-splinter.svg`, "item"),
 ];
 
 export const assetManifestByKey = Object.fromEntries(

@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Dices, LoaderCircle, MessageCircle, Square, Volume2, X } from "lucide-react";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { GameButton } from "@/components/ui/GameButton";
 import { availableChoices } from "@/game/dialogue";
 import { dialoguesById } from "@/content/dialogues";
 import { npcsById } from "@/content/npcs";
-import { getAssetPath } from "@/lib/assets/manifest";
 import { voiceManager, type VoicePlaybackResult } from "@/lib/audio/voice-manager";
 import type { DialogueChoice, SaveData } from "@/types/game";
 
@@ -92,16 +92,14 @@ export function DialoguePanel({
         >
           <div className="grid max-h-[86dvh] overflow-y-auto sm:grid-cols-[10rem_1fr]">
             <div className="relative hidden min-h-52 overflow-hidden border-l border-[#c6a15b]/25 sm:block">
-              {/* eslint-disable-next-line @next/next/no-img-element -- generated local portrait */}
-              <img src={getAssetPath(node.portraitKey)} alt={`דיוקן של ${npc.name}`} className="absolute inset-0 size-full object-cover" />
+              <CharacterPortrait portraitKey={node.portraitKey} alt={`דיוקן של ${npc.name}`} sizes="160px" className="object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
             </div>
             <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6">
               <header className="mb-4 flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="size-14 shrink-0 overflow-hidden rounded-full border border-[#c6a15b]/45 sm:hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- generated local portrait */}
-                    <img src={getAssetPath(node.portraitKey)} alt="" className="size-full object-cover" />
+                  <div className="relative size-14 shrink-0 overflow-hidden rounded-full border border-[#c6a15b]/45 sm:hidden">
+                    <CharacterPortrait portraitKey={node.portraitKey} alt="" sizes="56px" className="object-cover" />
                   </div>
                   <div>
                     <h2 className="display-font text-2xl text-[#f0cf82]">{npc.name}</h2>

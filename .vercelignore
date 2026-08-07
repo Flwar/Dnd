@@ -1,0 +1,9 @@
+/assets/
+coverage/
+playwright-report/
+test-results/
+supabase/.temp/
+supabase/.branches/
+.open-next/
+.wrangler/
+*.log

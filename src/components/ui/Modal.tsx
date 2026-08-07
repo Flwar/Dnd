@@ -86,7 +86,7 @@ export function Modal({ open, title, onClose, children, className, overlayClassN
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className={cn("mobile-safe-modal stone-panel relative my-auto max-h-dvh w-full overscroll-contain overflow-y-auto sm:max-h-[calc(100dvh-2.5rem)] sm:max-w-4xl", className)}
+            className={cn("mobile-safe-modal stone-panel relative my-auto max-h-dvh w-full overscroll-contain overflow-x-hidden overflow-y-auto sm:max-h-[calc(100dvh-2.5rem)] sm:max-w-4xl", className)}
             initial={{ opacity: 0, y: 18, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.99 }}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { questsById } from "../../src/content";
 import { applyStoryEffects } from "../../src/game/dialogue";
 import { grantExperience, levelForExperience } from "../../src/game/progression";
+import { getVisibleConsequences } from "../../src/content/consequences";
 import {
   claimQuestReward,
   createQuestState,
@@ -101,6 +102,28 @@ describe("יחסים והשפעות סיפור", () => {
     expect(result.story.relationships.elric.trust).toBe(100);
     expect(result.story.flags.promise_kept).toBe(true);
     expect(result.character.reputation).toBe(3);
+  });
+
+  it("מחיל מחיר זהב מיד ולעולם אינו יוצר יתרה שלילית", () => {
+    const character = makeCharacter({ gold: 12 });
+    const story: StoryState = {
+      flags: {}, relationships: {}, reputation: 0, currentSceneId: "scene-arrival",
+      currentLocationId: "village-gate", visitedLocationIds: ["village-gate"],
+    };
+    const result = applyStoryEffects({ character, story }, [{ kind: "gold", amount: -20 }]);
+    expect(result.character.gold).toBe(0);
+  });
+
+  it("מציג במקום עצמו את ההשלכה המכנית של בחירה קודמת", () => {
+    const consequences = getVisibleConsequences(
+      { guardian_rune_understood: true, guardian_awakened_early: true },
+      "guardian-sanctum",
+    );
+    expect(consequences.map((entry) => entry.title)).toEqual([
+      "חולשת השומר פוענחה",
+      "השומר הוזהר",
+    ]);
+    expect(consequences[0].detail).toContain("שלושת הסיבובים");
   });
 });
 

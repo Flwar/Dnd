@@ -27,4 +27,14 @@ describe("נעילת מקלדת בחלון משחק", () => {
     expect(onClose).not.toHaveBeenCalled();
     window.removeEventListener("keydown", windowShortcut);
   });
+
+  it("חוסם גלילה אופקית בחלון מלא בטלפון", () => {
+    render(
+      <Modal open title="דף הדמות" onClose={() => undefined}>
+        <div className="w-[80rem]">תוכן רחב במיוחד</div>
+      </Modal>,
+    );
+
+    expect(screen.getByRole("dialog")).toHaveClass("overflow-x-hidden");
+  });
 });

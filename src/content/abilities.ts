@@ -30,8 +30,8 @@ export const abilities: Ability[] = [
     formula: { diceCount: 1, diceSides: 6, flatBonus: 2, attribute: "dexterity", damageType: "piercing" }, animationKey: "quick-stab", soundKey: "dagger-impact", statusEffects: [{ statusId: "bleeding", duration: 2, chance: 0.25 }], availability: { kind: "always" }, logText: "{actor} שולח להב מהיר אל {target}."
   },
   {
-    id: "rogue-sneak-attack", classId: "rogue", name: "מכת פתע", description: "נזק כבד נגד מטרה מסומנת או מעמדה חבויה.", iconAssetKey: "ability-sneak-attack", cost: 3, cooldown: 2, target: "enemy",
-    formula: { diceCount: 3, diceSides: 6, flatBonus: 0, attribute: "dexterity", damageType: "piercing" }, animationKey: "shadow-strike", soundKey: "critical-impact", statusEffects: [{ statusId: "bleeding", duration: 3, chance: 0.7 }], availability: { kind: "target-status", statusId: "marked" }, logText: "{actor} מופיע בנקודת התורפה של {target}."
+    id: "rogue-sneak-attack", classId: "rogue", name: "מכת פתע", description: "דקירה כבדה; סימון המטרה או יציאה מן הצל מעצימים אותה עוד יותר.", iconAssetKey: "ability-sneak-attack", cost: 3, cooldown: 2, target: "enemy",
+    formula: { diceCount: 3, diceSides: 6, flatBonus: 0, attribute: "dexterity", damageType: "piercing" }, animationKey: "shadow-strike", soundKey: "critical-impact", statusEffects: [{ statusId: "bleeding", duration: 3, chance: 0.7 }], availability: { kind: "always" }, logText: "{actor} מופיע בנקודת התורפה של {target}."
   },
   {
     id: "rogue-vanish", classId: "rogue", name: "היעלמות בצל", description: "נבלע בחשכה וזוכה בדיוק ובעוצמה בפגיעה הבאה.", iconAssetKey: "ability-vanish", cost: 2, cooldown: 3, target: "self",
@@ -95,7 +95,7 @@ export const abilities: Ability[] = [
   },
   {
     id: "boss-stone-slam", classId: "barbarian", name: "מכת אבן כבדה", description: "אגרוף סלע מטלטל את הקרקע ועלול להמם.", iconAssetKey: "ability-stone-slam", cost: 0, cooldown: 1, target: "enemy",
-    formula: { diceCount: 2, diceSides: 8, flatBonus: 3, attribute: "strength", damageType: "physical" }, animationKey: "stone-slam", soundKey: "stone-impact", statusEffects: [{ statusId: "stunned", duration: 1, chance: 0.25 }], availability: { kind: "always" }, logText: "שומר האבן מנחית אגרוף כבד."
+    formula: { diceCount: 1, diceSides: 6, flatBonus: 1, attribute: "strength", damageType: "physical" }, animationKey: "stone-slam", soundKey: "stone-impact", statusEffects: [{ statusId: "stunned", duration: 1, chance: 0.1 }], availability: { kind: "always" }, logText: "שומר האבן מנחית אגרוף כבד."
   },
   {
     id: "boss-defensive-stance", classId: "fighter", name: "עמידת הבזלת", description: "השומר סוגר את לוחות האבן ומחזק את השריון.", iconAssetKey: "ability-basalt-guard", cost: 0, cooldown: 3, target: "self",
@@ -107,7 +107,7 @@ export const abilities: Ability[] = [
   },
   {
     id: "boss-rune-crush", classId: "barbarian", name: "ריסוק רוני", description: "מכה איומה המשתחררת לאחר אזהרה ברורה.", iconAssetKey: "ability-rune-crush", cost: 0, cooldown: 4, target: "enemy",
-    formula: { diceCount: 3, diceSides: 10, flatBonus: 4, attribute: "strength", damageType: "arcane" }, animationKey: "rune-crush", soundKey: "critical-impact", statusEffects: [{ statusId: "stunned", duration: 1, chance: 0.5 }], availability: { kind: "self-status-absent", statusId: "guarded" }, logText: "הכוח שנאגר ברונות מתרסק על {target}."
+    formula: { diceCount: 2, diceSides: 8, flatBonus: 2, attribute: "strength", damageType: "arcane" }, animationKey: "rune-crush", soundKey: "critical-impact", statusEffects: [], availability: { kind: "self-status-absent", statusId: "guarded" }, logText: "הכוח שנאגר ברונות מתרסק על {target}."
   },
 ];
 

@@ -130,8 +130,9 @@ describe("ממשק הקרב", () => {
     expect(document.body.style.overflow).toBe("hidden");
 
     const actionRegion = screen.getByTestId("combat-action-region");
-    expect(actionRegion).toHaveClass("shrink-0", "overflow-y-auto", "overscroll-contain");
-    expect(screen.getByTestId("combat-battlefield-scroll-region")).toHaveClass("overflow-y-auto", "overscroll-contain");
+    expect(actionRegion).toHaveClass("shrink-0", "overflow-hidden");
+    expect(screen.getByTestId("combat-battlefield-scroll-region")).toHaveClass("overflow-hidden");
+    expect(screen.getByTestId("combat-battlefield-scroll-region")).not.toHaveClass("overflow-y-auto");
 
     unmount();
     expect(document.body.style.overflow).toBe(previousOverflow);

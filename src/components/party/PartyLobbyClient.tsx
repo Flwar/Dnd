@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRight, CheckCircle2, Shield, UsersRound } from "lucide-react";
 import { Atmosphere } from "@/components/shell/Atmosphere";
+import { getAssetPath } from "@/lib/assets/manifest";
 import { PartyCharacterPicker } from "@/components/party/PartyCharacterPicker";
 import { PartyEntryPanel } from "@/components/party/PartyEntryPanel";
 import { PartyRoomPanel } from "@/components/party/PartyRoomPanel";
@@ -331,7 +332,7 @@ export function PartyLobbyClient({
 
   return (
     <main id="main-content" className="screen-shell min-h-dvh px-4 py-6 sm:px-8 sm:py-8">
-      <Atmosphere image="/assets/rebuild/backgrounds/arfelon-square.webp" priority />
+      <Atmosphere image={getAssetPath("background-arfelon-square")} mobileImage={getAssetPath("background-arfelon-square-mobile")} priority />
       <div className="relative z-10 mx-auto max-w-6xl">
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>

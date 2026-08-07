@@ -46,7 +46,8 @@ tests/
   unit/                   Pure domain tests
   integration/            Component and boundary tests
   e2e/                    Browser flows
-public/assets/rebuild/    Local optimized art assets
+public/assets/art-v2/     Art-directed scenes, portraits, class previews and King icons
+public/assets/rebuild/    Local optimized content icons and compatibility assets
 open-next.config.ts       Cloudflare OpenNext adapter configuration
 wrangler.jsonc            Cloudflare Worker runtime, assets, images, and observability
 ```
@@ -247,7 +248,7 @@ Because accepted commands and rewards are idempotent, repeating the last request
 
 ## Assets and audio
 
-The canonical visual manifest is `src/lib/assets/manifest.ts`. It maps 117 stable illustration keys to files under `public/assets/rebuild`; content and UI refer to keys, not remote URLs. Desktop and mobile scene variants are separate entries. `ASSET_CREDITS.md` records provenance, generation, processing, font licenses, Lucide's interface-icon license, and distribution notes.
+The canonical visual manifest is `src/lib/assets/manifest.ts`. It maps 140 stable illustration keys to local files under `public/assets/art-v2` and `public/assets/rebuild`; content and UI refer to keys, not remote URLs. Every scene has separate desktop and art-directed mobile variants. Every race portrait, NPC portrait, class preview, and King ability has a dedicated finished asset. Integrity tests reject missing files and placeholder/dummy/temporary/silhouette paths. `ASSET_CREDITS.md` records provenance, generation, processing, font licenses, Lucide's interface-icon license, and distribution notes.
 
 The audio manager is a Client-only Web Audio lifecycle service. It unlocks after user interaction, tracks music/effects/mute state, fades ambience, disconnects nodes, and generates short procedural cues without missing runtime files. If recorded audio is added later, it must use the same lifecycle and licensing rules.
 

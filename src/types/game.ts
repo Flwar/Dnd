@@ -298,6 +298,7 @@ export type StoryEffect =
   | { kind: "quest-start"; questId: string }
   | { kind: "quest-objective"; questId: string; objectiveId: string; status: ObjectiveStatus }
   | { kind: "experience"; amount: number }
+  | { kind: "gold"; amount: number }
   | { kind: "heal"; amount: number };
 
 export type DialogueApproach =
@@ -418,7 +419,10 @@ export interface StatusDefinition {
   maxStacks: number;
   armorModifier?: number;
   accuracyModifier?: number;
+  /** Multiplies damage dealt by the affected combatant. */
   damageMultiplier?: number;
+  /** Multiplies damage received by the affected combatant. */
+  incomingDamageMultiplier?: number;
   damagePerTurn?: number;
   healingPerTurn?: number;
   skipTurn?: boolean;

@@ -77,14 +77,14 @@ Content IDs use kebab-case because they appear in routes, save data, SQL checks,
 The canonical production manifest is `src/lib/assets/manifest.ts`. Runtime content refers to an asset key; only the manifest knows the local path.
 
 1. Create, license, or generate the asset with a documented commercial-use basis.
-2. Store it under the appropriate `public/assets/rebuild` directory.
+2. Keep full-resolution generated sources under `assets/art-v2` and write deployment-ready files to the matching `public/assets/art-v2` directory. Existing content icons that are not part of the art-v2 pipeline remain under `public/assets/rebuild`.
 3. Use WebP or AVIF for raster art and optimize it before committing.
 4. For a location background, provide a wide desktop image and a portrait-oriented `-mobile` variant.
 5. Add stable entries to `src/lib/assets/manifest.ts`.
 6. Add provenance, creator/source, license, attribution, and modifications to `ASSET_CREDITS.md`.
 7. Use `getAssetPath("asset-key")`; do not hardcode a remote URL.
 
-Production raster optimization uses Sharp with `effort: 6` and `smartSubsample: true`. Resize wide backgrounds to `1024×576` at WebP quality 55, mobile backgrounds to `576×720` at quality 55, portraits to `288×360` at quality 62, and square item/ability art to `160×160` at quality 70. Keep the social preview at `1200×630`. Write optimized files to a separate directory first, compare representative dark and high-detail scenes at their actual UI size, then replace the repository copies only after the full manifest remains complete. Finish by running `npm run test:unit`, `npm run build`, and the desktop/mobile browser smoke tests; lossy recompression must not be applied repeatedly to already optimized files.
+The art-v2 production scripts use Sharp with Lanczos resizing, gentle sharpening, high-quality WebP and no repeated lossy recompression. Run `npm run assets:build` to produce 1920×1080 desktop scenes, 1440×1800 mobile scenes, 960×1200 portraits, 1280×720 class previews and 384×384 special icons. Keep the social preview at `1200×630`. Compare representative dark and high-detail scenes at their actual UI size, then run `npm run test:unit`, `npm run build`, and the desktop/mobile browser smoke tests.
 
 Locally hosted fonts and code-rendered icon libraries are assets too. Record their exact package or file path, upstream project, license, required notice, and modifications in `ASSET_CREDITS.md`, even though they do not belong in the scene-art manifest.
 
@@ -104,6 +104,7 @@ Asset acceptance checklist:
 - no embedded words, logos, watermarks, or recognizable copyrighted characters;
 - no hotlink or expiring URL;
 - no placeholder silhouette presented as final art;
+- no `placeholder`, `dummy`, `temporary`, `silhouette`, or `coming-soon` term in a production manifest key or path;
 - dimensions match the composition in which it is used;
 - meaningful Hebrew alt text is supplied by the UI, not baked into the image;
 - the asset appears in `ASSET_CREDITS.md`.

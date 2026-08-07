@@ -2,6 +2,21 @@
 
 כל נכסי האיור הרסטריים ברשימה זו נוצרו במיוחד עבור **הכתר המנופץ** באמצעות כלי ה־image generation המובנה של OpenAI בתאריכים 31 ביולי ו־1 באוגוסט 2026. הם נשמרים מקומית במאגר; אין קישורים חמים, כתובות זמניות או תלות בנכסי משחקים קיימים. הגופנים ואייקוני הממשק הם נכסי צד שלישי ומפורטים בנפרד בהמשך.
 
+## שכבת האמנות של גרסה 1.2.0 — הכרוניקה החרוטה
+
+ב־7 באוגוסט 2026 נוצרה שכבת אמנות מקורית חדשה, חדה ונפרדת לכל משפחת תוכן. קובצי המקור נשמרים תחת `assets/art-v2`; קובצי הייצור המקומיים נמצאים תחת `public/assets/art-v2`. הנחיית האמנות המשותפת היא ציור שמן מט בשילוב חריטת נחושת, חומרי אבן ומתכת מוחשיים, תאורה סביבתית מרוסנת וצלליות קריאות — ללא טקסט אפוי, סימני מים, מסגרת UI, העתקת סגנון של אמן חי או זיכיון קיים.
+
+| חבילת 1.2.0 | מקור מקומי | תוצר מקומי | כמות תוצרים | יצירה ושינויים |
+| --- | --- | --- | ---: | --- |
+| סצנות מלאות | `assets/art-v2/sources/*-v2.png` | `public/assets/art-v2/backgrounds/*.webp` | 36 | 18 קומפוזיציות מקוריות נפרדות; לכל אחת חיתוך שולחן עבודה 1920×1080 וחיתוך נייד 1440×1800, התאמת צבע וחידוד Lanczos/Sharp |
+| דיוקנאות שחקן | `assets/art-v2/portrait-sources/portrait-{human,elf,dwarf,halfling,orc,dragonborn}-*-v2.png` | `public/assets/art-v2/portraits/portrait-{human,elf,dwarf,halfling,orc,dragonborn}-*.webp` | 30 | חמש דמויות ייחודיות לכל גזע; חיתוך אנכי 960×1200, חידוד ודחיסת WebP |
+| דיוקנאות NPC | `assets/art-v2/portrait-sources/portrait-npc-*-v2.png` | `public/assets/art-v2/portraits/portrait-npc-*.webp` | 6 | אלריק, מירה, תאל, ברום, דנור והאישה באפור; קול חזותי ואופי מובחנים לכל דמות |
+| איורי מקצוע | `assets/art-v2/class-sources/class-*-preview-v2.png` | `public/assets/art-v2/classes/class-*-preview.webp` | 7 | לוחם, קוסם, נוכל, סייר, כוהן, ברברי ומלך; קומפוזיציות 16:9 מלאות ולא צלליות זמניות |
+| סמלי המלך | `assets/art-v2/icon-sources/*-v2.png` | `public/assets/art-v2/icons/*.webp` | 4 | שלוש יכולות מלך וכתר לביש; 384×384, צללית ייחודית ובדיקה גם בגודל תצוגה של 80 פיקסלים |
+| גרעין קנבס | קוד SVG מקורי | `public/assets/art-v2/textures/canvas-grain.svg` | 1 | מרקם וקטורי פרוצדורלי שמחבר את התמונות לממשק בלי להסתיר פרטים |
+
+היוצר של כל חמש חבילות האיור הוא OpenAI image generation בהכוונת צוות הפרויקט. אין מקור תמונות חיצוני ואין ייחוס חיצוני נדרש; ההפצה כפופה לתנאי פלט OpenAI ולבדיקה משפטית רגילה לפני הפצה מסחרית. בדיקת שלמות אוטומטית נכשלת אם מפתח או נתיב במניפסט מכיל מונחי placeholder, dummy, temporary, silhouette או coming-soon, ואם חסר קובץ מקומי. ארבעת סקריפטי הבנייה הם `scripts/build-art-v2.mjs`, `scripts/build-portraits-v2.mjs`, `scripts/build-icons-v2.mjs` ו־`scripts/build-class-previews-v2.mjs`; ניתן להריץ את כולם באמצעות `npm run assets:build`.
+
 ## תנאי שימוש ותיעוד מקור
 
 - יוצר: OpenAI image generation, בהכוונת צוות הפרויקט.
@@ -15,17 +30,17 @@
 
 | חבילה | נתיבים מקומיים | כמות | תיאור | שינויים |
 | --- | --- | ---: | --- | --- |
-| רקע תפריט קולנועי | `public/assets/rebuild/backgrounds/menu-cinematic*.webp` | 2 | מזבח אבן וכתר שבור מעל עמק ערפילי; ללא טקסט | גרסאות שולחן עבודה ומובייל, חיתוך קשב, WebP |
+| רקע תפריט קולנועי | `public/assets/art-v2/backgrounds/menu-cinematic*.webp` | 2 | מזבח אבן וכתר שבור מעל עמק ערפילי; ללא טקסט | גרסאות שולחן עבודה ומובייל, חיתוך קשב, WebP |
 | תמונת שיתוף חברתית | `public/og.png`, `public/assets/rebuild/backgrounds/social-preview.webp` | 2 | שבעת שברי הכתר מרחפים מעל מזבח אבן ועמק ערפילי; ללא טקסט | מקור PNG מקומי וגרסת WebP בגודל 1200×630 |
-| ערפלון והדרך למכרה | `public/assets/rebuild/backgrounds/{village-gate,arfelon-square,wet-raven-inn,smithy,healer-hut,headman-house,mine-road}*.webp` | 14 | שבע סביבות מובחנות לכפר, שירותיו והדרך | פיצול אטלס, גרסאות רחבות וניידות, WebP |
-| המכרה והעימות המסכם | `public/assets/rebuild/backgrounds/{mine-entrance,main-tunnel,abandoned-tool-store,flooded-passage,pillar-hall,hidden-chamber,guardian-sanctum,shard-sanctum}*.webp` | 16 | שמונה סביבות מובחנות מן הכניסה ועד הרסיס | פיצול שני אטלסים, גרסאות רחבות וניידות, WebP |
-| דיוקנאות דמויות שחקן | `public/assets/rebuild/portraits/portrait-{human,elf,dwarf,halfling,orc,dragonborn}-*.webp` | 30 | חמש אפשרויות לכל אחד מששת הגזעים; ארבע וריאציות אטלס ודיוקן חדש ונפרד לכל גזע | פיצול אטלס או מקור יחיד, חיתוכים ודרגות צבע מובחנים, WebP |
-| דיוקנאות דמויות עולם | `public/assets/rebuild/portraits/portrait-npc-*.webp` | 6 | אלריק, מירה, תאל, ברום, דנור והאישה באפור | פיצול אטלס, חיתוך אחיד, WebP |
+| ערפלון והדרך למכרה | `public/assets/art-v2/backgrounds/{village-gate,arfelon-square,wet-raven-inn,smithy,healer-hut,headman-house,mine-road,old-watchtower,standing-stones}*.webp` | 18 | תשע סביבות מובחנות לכפר, שירותיו, הדרך ושני אזורי רשות | יצירה מלאה נפרדת, גרסאות רחבות וניידות, WebP |
+| המכרה והעימות המסכם | `public/assets/art-v2/backgrounds/{mine-entrance,main-tunnel,abandoned-tool-store,flooded-passage,pillar-hall,hidden-chamber,guardian-sanctum,shard-sanctum}*.webp` | 16 | שמונה סביבות מובחנות מן הכניסה ועד הרסיס | יצירה מלאה נפרדת, גרסאות רחבות וניידות, WebP |
+| דיוקנאות דמויות שחקן | `public/assets/art-v2/portraits/portrait-{human,elf,dwarf,halfling,orc,dragonborn}-*.webp` | 30 | חמש אפשרויות נפרדות לכל אחד מששת הגזעים | מקור יחיד לכל דיוקן, חיתוך אנכי, WebP |
+| דיוקנאות דמויות עולם | `public/assets/art-v2/portraits/portrait-npc-*.webp` | 6 | אלריק, מירה, תאל, ברום, דנור והאישה באפור | מקור יחיד לכל דמות, חיתוך אחיד, WebP |
 | אייקוני יכולות | `public/assets/rebuild/icons/abilities/*.webp` | 24 | כל 18 יכולות הפתיחה ושש יכולות אויב/בוס | פיצול אטלסים, חיתוך ריבועי, WebP |
 | אייקוני פריטים | `public/assets/rebuild/icons/items/*.webp` | 30 | כל מפתחות הפריטים בפרק הפתיחה | פיצול אטלסים, חיתוך ריבועי, WebP |
-| סמלי המלך | `public/assets/rebuild/icons/{abilities,items}/*{royal,crown,sovereign,king}*.svg` | 4 | שלוש יכולות מלך וכתר ייחודי | SVG מקורי שנוצר בקוד עבור הפרויקט; ללא נכס חיצוני |
+| סמלי המלך | `public/assets/art-v2/icons/*.webp` | 4 | שלוש יכולות מלך וכתר ייחודי | יצירה מקורית מלאה, חיתוך ריבועי וחידוד לגודל משחק |
 
-בסך הכול קיימות 127 רשומות איור במניפסט המקומי, ועוד `public/og.png` כתמונת מקור לשיתוף החברתי.
+בסך הכול קיימות 140 רשומות איור במניפסט המקומי, ועוד `public/og.png` כתמונת מקור לשיתוף החברתי. שכבת 1.2.0 היא המקור הקנוני לסצנות, לדיוקנאות, לאיורי המקצוע ולסמלי המלך; נכסי rebuild שנותרו משמשים אייקוני תוכן ותאימות בלבד.
 
 ## תהליך אופטימיזציה לתצוגות Retina
 

@@ -126,6 +126,12 @@ export function applyStoryEffects(
       case "experience":
         state = { ...state, experienceGranted: state.experienceGranted + effect.amount };
         break;
+      case "gold":
+        state = {
+          ...state,
+          character: { ...state.character, gold: Math.max(0, state.character.gold + effect.amount) },
+        };
+        break;
       case "heal":
         state = {
           ...state,

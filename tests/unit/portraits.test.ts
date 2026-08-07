@@ -20,7 +20,7 @@ describe("פתרון מקור דיוקן", () => {
     expect(isPresetPortraitKey("portrait-elf-01")).toBe(true);
     expect(getPortraitSource("portrait-elf-01")).toEqual({
       kind: "preset",
-      src: "/assets/rebuild/portraits/portrait-elf-01.webp",
+      src: "/assets/art-v2/portraits/portrait-elf-01.webp",
     });
   });
 

@@ -30,7 +30,7 @@ export function OpeningMenu({ cloudConfigured }: { cloudConfigured: boolean }) {
 
   return (
     <main id="main-content" className="screen-shell flex min-h-dvh items-center px-5 py-10 sm:px-10 lg:px-[8vw]">
-      <Atmosphere image={getAssetPath("background-menu-cinematic")} priority />
+      <Atmosphere image={getAssetPath("background-menu-cinematic")} mobileImage={getAssetPath("background-menu-cinematic-mobile")} priority />
       <motion.section
         className="relative z-10 w-full max-w-xl"
         initial={{ opacity: 0, x: 24 }}

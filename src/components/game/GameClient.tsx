@@ -26,6 +26,8 @@ import { openingScenesById } from "@/content/chapters/opening";
 import { locationsById } from "@/content/locations";
 import { itemsById } from "@/content/items";
 import { classesById } from "@/content/classes";
+import { npcsById } from "@/content/npcs";
+import { consequenceEffects, type VisibleConsequence } from "@/content/consequences";
 import { audioManager } from "@/lib/audio/audio-manager";
 import type {
   CombatAction,
@@ -71,6 +73,8 @@ const sceneByLocation: Record<string, string> = {
   smithy: "scene-preparation",
   "healer-hut": "scene-preparation",
   "mine-road": "scene-road-to-mine",
+  "old-watchtower": "scene-road-to-mine",
+  "standing-stones": "scene-road-to-mine",
   "mine-entrance": "scene-mine-entrance",
   "main-tunnel": "scene-main-tunnel",
   "abandoned-tool-store": "scene-trapped-miner",
@@ -144,6 +148,33 @@ function progressEffectsForLocation(locationId: string): StoryEffect[] {
   if (locationId === "mine-entrance") return [{ kind: "quest-objective", questId: "shadows-beneath-village", objectiveId: "reach-mine", status: "completed" }];
   if (locationId === "main-tunnel") return [{ kind: "quest-objective", questId: "shadows-beneath-village", objectiveId: "investigate-main-tunnel", status: "completed" }];
   return [];
+}
+
+function consequenceNotificationType(tone: VisibleConsequence["tone"]): Notification["type"] {
+  if (tone === "danger") return "error";
+  if (tone === "benefit") return "reputation";
+  return "discovery";
+}
+
+function primaryEffectFeedback(effects: readonly StoryEffect[]): { title: string; message: string; type: Notification["type"] } | null {
+  const consequence = consequenceEffects(effects)[0];
+  if (consequence) return { title: consequence.title, message: consequence.detail, type: consequenceNotificationType(consequence.tone) };
+  for (const effect of effects) {
+    if (effect.kind === "grant-item") {
+      const item = itemsById[effect.itemId];
+      if (item) return { title: "נמצא פריט", message: `${item.name} נוסף לתיק.`, type: "item" };
+    }
+    if (effect.kind === "relationship") {
+      const npc = npcsById[effect.npcId];
+      const field = effect.field === "trust" ? "האמון" : effect.field === "respect" ? "הכבוד" : "הפחד";
+      return { title: `${npc?.name ?? "בן השיח"} הגיב`, message: `${field} ${effect.amount >= 0 ? "עלה" : "ירד"} ב־${Math.abs(effect.amount)}.`, type: "reputation" };
+    }
+    if (effect.kind === "heal") return { title: "הגוף התאושש", message: `הושבו עד ${effect.amount} נקודות חיים.`, type: "reputation" };
+    if (effect.kind === "gold") return { title: "הזהב השתנה", message: `${Math.abs(effect.amount)} מטבעות ${effect.amount >= 0 ? "נוספו" : "שולמו"}.`, type: effect.amount >= 0 ? "item" : "reputation" };
+    if (effect.kind === "experience") return { title: "ניסיון", message: `צברת ${effect.amount} נקודות ניסיון.`, type: "experience" };
+    if (effect.kind === "quest-objective") return { title: "המשימה השתנתה", message: effect.status === "completed" ? "יעד ממשי הושלם ביומן." : "המסלול ביומן השתנה בהתאם לתוצאה.", type: "quest" };
+  }
+  return null;
 }
 
 function effectsForRoll(definition: SkillCheckDefinition, outcome: ReturnType<typeof resolveSkillCheck>["outcome"]): StoryEffect[] {
@@ -318,15 +349,32 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     return () => { window.clearInterval(interval); window.removeEventListener("beforeunload", beforeUnload); };
   }, [cacheKey, commit, saveStatus]);
 
-  const applyEffects = useCallback((current: SaveData, effects: readonly StoryEffect[], eventId: string): SaveData => {
+  const applyEffects = useCallback((current: SaveData, effects: readonly StoryEffect[], eventId: string, announce = true): SaveData => {
     const result = applyEffectsToSave(current, effects, eventId);
-    for (const itemId of result.acquiredItemIds) {
-      const item = itemsById[itemId];
-      if (item) { audioManager.play("pickup"); notify("item", "פריט חדש", `קיבלת: ${item.name}`); }
+    if (announce) {
+      for (const itemId of result.acquiredItemIds) {
+        const item = itemsById[itemId];
+        if (item) { audioManager.play("pickup"); notify("item", "פריט חדש", `קיבלת: ${item.name}`); }
+      }
+      if (result.questUpdated) { audioManager.play("quest"); notify("quest", "המשימה עודכנה", "יעד הושלם או נתיב חדש נפתח ביומן.", `quest-${eventId}`); }
+      if (result.experienceGranted > 0) notify("experience", "ניסיון", `צברת ${result.experienceGranted} נקודות ניסיון.`);
+      const goldDelta = result.save.character.gold - current.character.gold;
+      if (goldDelta !== 0) notify("item", goldDelta > 0 ? "תשלום התקבל" : "מטבעות שולמו", `${Math.abs(goldDelta)} מטבעות ${goldDelta > 0 ? "נוספו לארנק" : "הוסרו מן הארנק"}.`, `gold-${eventId}`);
+      const reputationDelta = result.save.character.reputation - current.character.reputation;
+      if (reputationDelta !== 0) notify("reputation", "המוניטין השתנה", `המוניטין ${reputationDelta > 0 ? "עלה" : "ירד"} ב־${Math.abs(reputationDelta)}.`, `reputation-${eventId}`);
+      for (const effect of effects) {
+        if (effect.kind !== "relationship") continue;
+        const npc = npcsById[effect.npcId];
+        const field = effect.field === "trust" ? "האמון" : effect.field === "respect" ? "הכבוד" : "הפחד";
+        notify("reputation", `${npc?.name ?? "בן השיח"} הגיב`, `${field} ${effect.amount >= 0 ? "עלה" : "ירד"} ב־${Math.abs(effect.amount)}.`, `relationship-${eventId}-${effect.npcId}-${effect.field}`);
+      }
+      for (const consequence of consequenceEffects(effects).slice(0, 2)) {
+        notify(consequenceNotificationType(consequence.tone), consequence.title, consequence.detail, `consequence-${eventId}-${consequence.key}`);
+      }
+      const healed = result.save.character.currentHealth - current.character.currentHealth;
+      if (healed > 0) notify("reputation", "הטיפול השפיע", `${healed} נקודות חיים הושבו בפועל.`, `healing-${eventId}`);
+      if (result.levelsGained > 0) { audioManager.play("victory"); notify("level", "עלית דרגה!", `הגעת לדרגה ${result.save.character.level}. החיים והמשאב המרבי גדלו.`, `level-${result.save.character.level}`); }
     }
-    if (result.questUpdated) { audioManager.play("quest"); notify("quest", "המשימה עודכנה", "היומן מכיל מידע חדש.", `quest-${eventId}`); }
-    if (result.experienceGranted > 0) notify("experience", "ניסיון", `צברת ${result.experienceGranted} נקודות ניסיון.`);
-    if (result.levelsGained > 0) { audioManager.play("victory"); notify("level", "עלית דרגה!", `הגעת לדרגה ${result.save.character.level}. החיים והמשאב המרבי גדלו.`, `level-${result.save.character.level}`); }
     return result.save;
   }, [notify]);
 
@@ -433,23 +481,50 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
   const beginEncounter = useCallback((current: SaveData, encounterId: string) => {
     const encounter = encountersById[encounterId];
     if (!encounter) { notify("error", "הקרב לא נפתח", "העימות אינו קיים בתוכן המשחק."); return; }
+    let checkpointSave = current;
     let player = createPlayerCombatant(current);
     if (current.story.flags.combat_advantage_road && encounterId === "road-ambush") {
       player = { ...player, statuses: [{ statusId: "hidden", remainingTurns: 1, stacks: 1, sourceCombatantId: player.id }] };
     }
-    const enemies = encounter.enemyIds.map((enemyId, index) => {
-      const scaled = scaleEnemy(enemiesById[enemyId], 1, current.character.level);
-      const initialStatuses = scaled.boss && current.story.flags.guardian_rune_understood
-        ? [{ statusId: "exposed-rune", remainingTurns: 2, stacks: 1, sourceCombatantId: player.id }]
+    if (current.story.flags.surprised_on_road && encounterId === "road-ambush") {
+      player = { ...player, statuses: [...player.statuses, { statusId: "frightened", remainingTurns: 2, stacks: 1, sourceCombatantId: player.id }] };
+    }
+    if (current.story.flags.flood_crossed_quietly && encounterId === "flooded-passage-pack") {
+      player = { ...player, statuses: [...player.statuses, { statusId: "hidden", remainingTurns: 1, stacks: 1, sourceCombatantId: player.id }] };
+    }
+    if (current.story.flags.temporary_corruption) {
+      player = { ...player, statuses: [...player.statuses, { statusId: "corrupted", remainingTurns: 2, stacks: 1, sourceCombatantId: player.id }] };
+      checkpointSave = withStoryFlag(checkpointSave, "temporary_corruption", false);
+      checkpointSave = withStoryFlag(checkpointSave, "corruption_entered_combat", true);
+    }
+    let enemyIds = [...encounter.enemyIds];
+    if (encounterId === "road-ambush" && current.story.flags.tower_beacon_disabled) enemyIds = enemyIds.slice(0, 1);
+    if (encounterId === "road-ambush" && current.story.flags.road_ambush_reinforced) enemyIds.push("corrupted-mine-vermin");
+    if (encounterId === "flooded-passage-pack" && (current.story.flags.flood_pack_triggered || current.story.flags.made_noise_in_flood)) enemyIds.push("corrupted-mine-vermin");
+    const ownsRuneHammer = current.inventory.some((entry) => entry.itemId === "rune-breaker-hammer" && entry.quantity > 0);
+    const enemies = enemyIds.map((enemyId, index) => {
+      let scaled = scaleEnemy(enemiesById[enemyId], 1, current.character.level);
+      if (scaled.boss && current.story.flags.waystone_ward_restored) {
+        scaled = { ...scaled, maximumHealth: Math.max(1, scaled.maximumHealth - 12), accuracy: Math.max(0, scaled.accuracy - 2) };
+      }
+      if (scaled.boss && current.story.flags.stone_magic_suspected) scaled = { ...scaled, armor: Math.max(10, scaled.armor - 1) };
+      if (scaled.boss && current.story.flags.map_remembered) scaled = { ...scaled, accuracy: Math.max(0, scaled.accuracy - 1) };
+      if (scaled.boss && ownsRuneHammer) scaled = { ...scaled, armor: Math.max(10, scaled.armor - 2) };
+      const initialStatuses = scaled.boss
+        ? [
+            ...(current.story.flags.guardian_rune_understood || current.story.flags.seven_three_rhythm_known ? [{ statusId: "exposed-rune", remainingTurns: current.story.flags.guardian_rune_understood ? 3 : 1, stacks: 1, sourceCombatantId: player.id }] : []),
+            ...(current.story.flags.guardian_awakened_early ? [{ statusId: "guarded", remainingTurns: 2, stacks: 1, sourceCombatantId: `enemy-${enemyId}-${index + 1}` }] : []),
+            ...(current.story.flags.waystone_ward_restored ? [{ statusId: "chilled", remainingTurns: 2, stacks: 1, sourceCombatantId: player.id }] : []),
+          ]
         : [];
       return createCombatantFromEnemy(scaled, `enemy-${enemyId}-${index + 1}`, initialStatuses);
     });
-    setCheckpoint(current);
+    setCheckpoint(checkpointSave);
     const state = createCombatState(encounter.id, [player, ...enemies], Date.now() >>> 0);
     setSelectedTargetId(enemies[0]?.id ?? null);
     setCombat(state);
     if (encounterId === "stone-guardian-boss") audioManager.play("boss");
-    void commit(current, `checkpoint:${encounter.checkpointId}`, true);
+    void commit(checkpointSave, `checkpoint:${encounter.checkpointId}`, true);
   }, [commit, notify, setCheckpoint, setCombat]);
 
   const closeDice = useCallback(() => {
@@ -500,13 +575,15 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
       audioManager.play("dice");
       setDice({ result, skillLabel: skillLabels[interaction.skillCheck.skill] });
       effects = [...effects, ...effectsForRoll(interaction.skillCheck, result.outcome)];
+      const concreteFeedback = primaryEffectFeedback(effects);
       rollFeedback = () => notify(
-        result.outcome.includes("success") ? "discovery" : "error",
-        result.outcome.includes("success") ? "הבדיקה הצליחה" : "הבדיקה נכשלה",
-        result.outcome.includes("success") ? "הבחנת בפרט שישנה את הדרך קדימה." : "הכישלון פתח תוצאה אחרת — המסע ממשיך.",
+        concreteFeedback?.type ?? (result.outcome.includes("success") ? "discovery" : "error"),
+        concreteFeedback?.title ?? (result.outcome.includes("success") ? "הבדיקה הצליחה" : "הבדיקה נכשלה"),
+        concreteFeedback?.message ?? (result.outcome.includes("success") ? "נחשף מידע חדש שנרשם ביומן." : "הכישלון יצר מחיר מיידי, אך הדרך נותרה פתוחה."),
+        `roll-${interaction.id}-${result.outcome}`,
       );
     }
-    next = applyEffects(next, effects, `interaction:${interaction.id}`);
+    next = applyEffects(next, effects, `interaction:${interaction.id}`, !rollFeedback);
     if (interaction.oneTime) next = withStoryFlag(next, `interaction_${interaction.id}_completed`, true);
     if (interaction.dialogueNodeId) next = openDialogue(interaction.dialogueNodeId, next);
     replaceSave(next);
@@ -549,30 +626,16 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
       setDice({ result, skillLabel: skillLabels[choice.skillCheck.skill] });
       effects = [...effects, ...effectsForRoll(choice.skillCheck, result.outcome)];
     }
-    const relationshipBefore = next.story.relationships[node.npcId];
     next = applyEffects(next, effects, `dialogue-choice:${choice.id}`);
     next = withStoryFlag(next, selectedKey, true);
-    const relationshipAfter = next.story.relationships[node.npcId];
-    if (relationshipBefore && relationshipAfter && JSON.stringify(relationshipBefore) !== JSON.stringify(relationshipAfter)) {
-      notify("reputation", "דבריך ייזכרו", `${node.npcId === "elric" ? "אלריק" : node.npcId === "mira" ? "מירה" : node.npcId === "danor" ? "דנור" : "בן שיחך"} זוכר את תשובתך.`);
-    }
     if (choice.nextNodeId) next = openDialogue(choice.nextNodeId, next);
     else setDialogueNodeId(null);
     if (choice.exitAction === "open-shop") { setDialogueNodeId(null); setActivePanel("merchant"); }
     let chapterCompletionHandled = false;
     if (node.id === "grey-woman-vision" && choice.exitAction === "close") {
-      next = withStoryFlag(next, "chapter_one_completed", true);
-      next = { ...next, story: { ...next.story, currentSceneId: "scene-chapter-completion" } };
-      setChapterComplete(true);
-      setSummaryOpen(true);
+      next = withStoryFlag(next, "return_to_arfelon", true);
       audioManager.play("vision");
-      chapterCompletionHandled = true;
-      const completionId = makeId("chapter-completion");
-      void commit(next, "chapter-complete", true)
-        .then(() => completeChapterAction(next.character.id, completionId))
-        .then((result) => {
-          if (!result.ok) notify("error", "הפרס ממתין", result.message, "chapter-reward-pending");
-        });
+      notify("quest", "הפרק נמשך", "שוב לערפלון. אנשי הכפר יגיבו למעשיך, ועליך להחליט איזו אמת לחשוף.", "return-to-arfelon");
       if (onlineParty && isPartyLeader) {
         void (async () => {
           const currentSceneId = partyGame.scene?.authoredId;
@@ -580,15 +643,38 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
           const nextSceneId = openingScenesById[currentSceneId]?.nextSceneIds[0];
           const advanced = await partyGame.submit("COMPLETE_SCENE", { sceneId: currentSceneId, nextSceneId });
           if (!advanced.ok) {
-            notify("error", "הפרק לא נסגר בחבורה", advanced.message);
-            return;
-          }
-          if (nextSceneId && openingScenesById[nextSceneId]?.nextSceneIds.length === 0) {
-            const completed = await partyGame.submit("COMPLETE_SCENE", { sceneId: nextSceneId });
-            if (!completed.ok) notify("error", "סיכום הפרק ממתין", completed.message);
+            notify("error", "החזרה לכפר ממתינה", advanced.message);
           }
         })();
       }
+    }
+    if (node.id.startsWith("elric-aftermath-") && choice.exitAction === "close") {
+      next = applyEffects(next, [
+        { kind: "quest-objective", questId: "shadows-beneath-village", objectiveId: "return-to-village", status: "completed" },
+      ], "chapter-return-objective");
+      next = withStoryFlag(next, "chapter_one_completed", true);
+      next = { ...next, story: { ...next.story, currentSceneId: "scene-chapter-completion" } };
+      const completedSave = next;
+      const finishChapter = () => {
+        setChapterComplete(true);
+        setSummaryOpen(true);
+        audioManager.play("victory");
+        const completionId = makeId("chapter-completion");
+        void commit(completedSave, "chapter-complete", true)
+          .then(() => completeChapterAction(completedSave.character.id, completionId))
+          .then((result) => {
+            if (!result.ok) notify("error", "הפרס ממתין", result.message, "chapter-reward-pending");
+          });
+        if (onlineParty && isPartyLeader) {
+          void partyGame.submit("COMPLETE_SCENE", { sceneId: "scene-chapter-completion" }).then((result) => {
+            if (!result.ok) notify("error", "סיכום הפרק ממתין", result.message);
+          });
+        }
+      };
+      replaceSave(completedSave);
+      if (choice.skillCheck) afterDiceRef.current = finishChapter;
+      else finishChapter();
+      chapterCompletionHandled = true;
     }
     if (!chapterCompletionHandled) {
       replaceSave(next);
@@ -652,7 +738,9 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
           return;
         }
         const currentSceneId = partyGame.scene?.authoredId;
-        const targetSceneId = sceneByLocation[exit.destinationId];
+        const targetSceneId = exit.destinationId === "arfelon-square" && saveRef.current.story.flags.vision_seen
+          ? "scene-chapter-completion"
+          : sceneByLocation[exit.destinationId];
         if (
           currentSceneId &&
           targetSceneId &&
@@ -668,8 +756,14 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     const current = saveRef.current;
     const newlyDiscovered = !current.discoveredLocationIds.includes(exit.destinationId);
     let next = travelToLocation(current, exit.destinationId);
-    next = { ...next, story: { ...next.story, currentSceneId: sceneByLocation[exit.destinationId] ?? next.story.currentSceneId } };
+    const targetSceneId = exit.destinationId === "arfelon-square" && current.story.flags.vision_seen
+      ? "scene-chapter-completion"
+      : sceneByLocation[exit.destinationId];
+    next = { ...next, story: { ...next.story, currentSceneId: targetSceneId ?? next.story.currentSceneId } };
     next = applyEffects(next, progressEffectsForLocation(exit.destinationId), `travel:${exit.destinationId}`);
+    if (exit.destinationId === "arfelon-square" && current.story.flags.vision_seen) {
+      next = applyEffects(next, [{ kind: "quest-objective", questId: "shadows-beneath-village", objectiveId: "return-to-village", status: "completed" }], "return-to-arfelon");
+    }
     if (newlyDiscovered) notify("discovery", "התגלה מקום חדש", exit.label, `location-${exit.destinationId}`);
     void commit(next, "location-transition", true);
   }, [applyEffects, commit, notify, onlineParty, partyGame]);

@@ -1,6 +1,6 @@
 {
   "name": "the-shattered-crown",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "משחק תפקידים פנטסטי מקוון בעברית מלאה",
   "engines": {
@@ -30,7 +30,12 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:lint": "supabase db lint",
-    "db:test": "supabase test db"
+    "db:test": "supabase test db",
+    "assets:art-v2": "node scripts/build-art-v2.mjs",
+    "assets:portraits-v2": "node scripts/build-portraits-v2.mjs",
+    "assets:icons-v2": "node scripts/build-icons-v2.mjs",
+    "assets:classes-v2": "node scripts/build-class-previews-v2.mjs",
+    "assets:build": "npm run assets:art-v2 && npm run assets:portraits-v2 && npm run assets:icons-v2 && npm run assets:classes-v2"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",

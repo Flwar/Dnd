@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <filter id="linen" x="-20%" y="-20%" width="140%" height="140%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.72 0.18" numOctaves="3" seed="27" stitchTiles="stitch" result="fibres"/>
+    <feColorMatrix in="fibres" type="saturate" values="0" result="grey"/>
+    <feComponentTransfer in="grey">
+      <feFuncR type="gamma" amplitude="0.72" exponent="1.35" offset="0.12"/>
+      <feFuncG type="gamma" amplitude="0.68" exponent="1.42" offset="0.1"/>
+      <feFuncB type="gamma" amplitude="0.61" exponent="1.5" offset="0.08"/>
+      <feFuncA type="table" tableValues="0 0.5"/>
+    </feComponentTransfer>
+  </filter>
+  <rect width="256" height="256" fill="#85745f" filter="url(#linen)"/>
+</svg>

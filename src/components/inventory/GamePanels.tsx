@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Coins, MapPin, Shield, Trash2 } from "lucide-react";
+import Image from "next/image";
+import { Coins, MapPin, Shield, Trash2, WandSparkles } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { GameButton } from "@/components/ui/GameButton";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { CharacterPortrait } from "@/components/character/CharacterPortrait";
+import { ArtDirectedPicture } from "@/components/ui/ArtDirectedPicture";
 import { itemsById } from "@/content/items";
 import { questsById } from "@/content/quests";
 import { locationsById } from "@/content/locations";
@@ -14,6 +16,7 @@ import { npcs } from "@/content/npcs";
 import { racesById } from "@/content/races";
 import { classesById } from "@/content/classes";
 import { backgroundsById } from "@/content/backgrounds";
+import { getAllVisibleConsequences, type ConsequenceTone } from "@/content/consequences";
 import { getAssetPath } from "@/lib/assets/manifest";
 import type { GamePanel } from "@/store/game-store";
 import type { EquipmentSlot, ItemCategory, SaveData } from "@/types/game";
@@ -43,6 +46,12 @@ const rarityLabels = { common: "רגיל", uncommon: "לא שכיח", rare: "נ�
 const rarityTones = { common: "border-white/15 text-[#d0c8ba]", uncommon: "border-[#77b686]/50 text-[#8fd09d]", rare: "border-[#62c6df]/55 text-[#7ed8ec]", epic: "border-[#ad7ae6]/55 text-[#c294f3]", legendary: "border-[#e2aa4d]/65 text-[#f0cf82]", mythic: "border-[#d05b54]/70 text-[#ff8e82]" };
 const slotLabels: Record<EquipmentSlot, string> = { weapon: "נשק", offhand: "יד משנית", armor: "שריון", helmet: "קסדה", gloves: "כפפות", boots: "מגפיים", ring: "טבעת", amulet: "קמע" };
 const attributeLabels = { strength: "כוח", dexterity: "זריזות", constitution: "חוסן", intelligence: "תבונה", wisdom: "חכמה", charisma: "כריזמה" };
+const consequenceTones: Record<ConsequenceTone, string> = {
+  benefit: "border-[#77b686]/40 bg-[#142a1d]/70 text-[#a9d7b4]",
+  danger: "border-[#d05b54]/45 bg-[#35171b]/70 text-[#f0a29c]",
+  knowledge: "border-[#62c6df]/38 bg-[#102b33]/70 text-[#addce6]",
+  world: "border-[#c6a15b]/38 bg-[#332716]/70 text-[#e0c98f]",
+};
 
 export function GamePanels({
   panel,
@@ -95,8 +104,7 @@ function InventoryPanel({ save, onEquip, onUnequip, onUse, onDrop }: { save: Sav
           const definition = itemsById[entry.itemId];
           if (!definition) return null;
           return <button key={entry.id} className={`relative min-h-32 border bg-black/25 p-2 text-center transition hover:bg-white/5 ${selected?.id === entry.id ? "border-[#f0cf82]" : rarityTones[definition.rarity].split(" ")[0]}`} onClick={() => { setSelectedId(entry.id); setConfirmDrop(false); }} aria-pressed={selected?.id === entry.id}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- generated local item icon */}
-            <img src={getAssetPath(definition.iconAssetKey)} alt="" className="mx-auto size-16 object-contain" loading="lazy" />
+            <Image src={getAssetPath(definition.iconAssetKey)} alt="" width={64} height={64} sizes="64px" className="mx-auto size-16 object-contain" />
             <span className="mt-1 block text-xs font-bold">{definition.name}</span>
             {entry.quantity > 1 ? <bdi className="absolute end-1.5 top-1.5 rounded-full bg-black/80 px-2 text-xs">{entry.quantity}</bdi> : null}
             {Object.values(save.equipment).includes(entry.id) ? <span className="absolute start-1.5 top-1.5 text-[#77b686]" title="מצויד"><Shield className="size-4" aria-label="מצויד" /></span> : null}
@@ -107,8 +115,7 @@ function InventoryPanel({ save, onEquip, onUnequip, onUse, onDrop }: { save: Sav
       <aside className="glass-inset min-h-64 p-4">
         {item && selected ? <>
           <div className="flex items-start gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element -- generated local item icon */}
-            <img src={getAssetPath(item.iconAssetKey)} alt={`סמל ${item.name}`} className="size-20 border border-white/10 object-contain" />
+            <Image src={getAssetPath(item.iconAssetKey)} alt={`סמל ${item.name}`} width={80} height={80} sizes="80px" className="size-20 border border-white/10 object-contain" />
             <div><h3 className="display-font text-xl text-[#f2dfb0]">{item.name}</h3><span className={`mt-1 inline-block border px-2 py-0.5 text-xs ${rarityTones[item.rarity]}`}>{rarityLabels[item.rarity]}</span></div>
           </div>
           <p className="mt-4 text-sm leading-6 text-[#bdb4a7]">{item.description}</p>
@@ -156,24 +163,25 @@ function QuestPanel({ save }: { save: SaveData }) {
 
 function MapPanel({ save }: { save: SaveData }) {
   return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{save.discoveredLocationIds.map((locationId) => { const location = locationsById[locationId]; if (!location) return null; const current = location.id === save.story.currentLocationId; return <article key={location.id} className={`relative min-h-40 overflow-hidden border ${current ? "border-[#f0cf82]" : "border-white/15"}`}>
-    <picture>
-      <source media="(max-width:760px)" srcSet={getAssetPath(`${location.backgroundAssetKey}-mobile`)} />
-      <img src={getAssetPath(location.backgroundAssetKey)} alt="" loading="lazy" className="absolute inset-0 size-full object-cover opacity-55" />
-    </picture><div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" /><div className="absolute inset-x-0 bottom-0 p-3"><h3 className="display-font text-xl text-[#f2dfb0]">{location.name}</h3>{current ? <p className="flex items-center gap-1 text-xs text-[#77b686]"><MapPin className="size-3" aria-hidden="true" />המיקום הנוכחי</p> : <p className="text-xs text-[#bdb4a7]">מקום שהתגלה</p>}</div></article>; })}</div>;
+    <ArtDirectedPicture desktopSrc={getAssetPath(location.backgroundAssetKey)} mobileSrc={getAssetPath(`${location.backgroundAssetKey}-mobile`)} alt="" pictureClassName="absolute inset-0" className="opacity-55" />
+    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" /><div className="absolute inset-x-0 bottom-0 p-3"><h3 className="display-font text-xl text-[#f2dfb0]">{location.name}</h3>{current ? <p className="flex items-center gap-1 text-xs text-[#77b686]"><MapPin className="size-3" aria-hidden="true" />המיקום הנוכחי</p> : <p className="text-xs text-[#bdb4a7]">מקום שהתגלה</p>}</div></article>; })}</div>;
 }
 
 function JournalPanel({ save }: { save: SaveData }) {
   const discoveredNpcIds = new Set(save.story.visitedLocationIds.flatMap((id) => locationsById[id]?.npcIds ?? []));
-  return <div className="grid gap-4 md:grid-cols-2">{npcs.filter((npc) => discoveredNpcIds.has(npc.id)).map((npc) => { const relationship = save.story.relationships[npc.id] ?? npc.initialRelationship; return <article key={npc.id} className="glass-inset grid grid-cols-[5rem_1fr] gap-3 p-3">
-    {/* eslint-disable-next-line @next/next/no-img-element -- generated local portrait */}
-    <img src={getAssetPath(npc.portraitKey)} alt={`דיוקן של ${npc.name}`} loading="lazy" className="aspect-square w-20 object-cover" /><div><h3 className="display-font text-xl text-[#f0cf82]">{npc.name}</h3><p className="text-xs text-[#9e968a]">{npc.title}</p><p className="mt-2 text-sm leading-6 text-[#c9c0b2]">{npc.journalEntry}</p><div className="mt-3 flex gap-3 text-xs"><span>אמון <bdi>{relationship.trust}</bdi></span><span>כבוד <bdi>{relationship.respect}</bdi></span><span>פחד <bdi>{relationship.fear}</bdi></span></div></div></article>; })}{save.journal.map((entry) => <article key={entry.id} className="parchment-panel p-4"><h3 className="display-font text-xl">{entry.title}</h3><p className="mt-2 text-sm leading-6">{entry.body}</p></article>)}</div>;
+  const consequences = getAllVisibleConsequences(save.story.flags);
+  return <div className="space-y-5">
+    {consequences.length > 0 ? <section aria-labelledby="journey-consequences-title"><h3 id="journey-consequences-title" className="display-font mb-3 flex items-center gap-2 text-2xl text-[#f0cf82]"><WandSparkles className="size-5" aria-hidden="true" />השלכות המסע</h3><div className="grid gap-2 md:grid-cols-2">{consequences.map((consequence) => <article key={consequence.key} className={`border-s-2 p-3 ${consequenceTones[consequence.tone]}`}><h4 className="font-bold">{consequence.title}</h4><p className="mt-1 text-sm leading-6 text-[#d4ccbd]">{consequence.detail}</p></article>)}</div></section> : null}
+    <section aria-labelledby="known-people-title"><h3 id="known-people-title" className="display-font mb-3 text-2xl text-[#f0cf82]">אנשים שפגשת</h3><div className="grid gap-4 md:grid-cols-2">{npcs.filter((npc) => discoveredNpcIds.has(npc.id)).map((npc) => { const relationship = save.story.relationships[npc.id] ?? npc.initialRelationship; return <article key={npc.id} className="glass-inset grid grid-cols-[5rem_1fr] gap-3 p-3">
+    <div className="relative size-20 overflow-hidden"><CharacterPortrait portraitKey={npc.portraitKey} alt={`דיוקן של ${npc.name}`} sizes="80px" className="object-cover" /></div><div><h4 className="display-font text-xl text-[#f0cf82]">{npc.name}</h4><p className="text-xs text-[#9e968a]">{npc.title}</p><p className="mt-2 text-sm leading-6 text-[#c9c0b2]">{npc.journalEntry}</p><div className="mt-3 flex gap-3 text-xs"><span>אמון <bdi>{relationship.trust}</bdi></span><span>כבוד <bdi>{relationship.respect}</bdi></span><span>פחד <bdi>{relationship.fear}</bdi></span></div></div></article>; })}</div></section>
+    {save.journal.length > 0 ? <section aria-labelledby="journal-notes-title"><h3 id="journal-notes-title" className="display-font mb-3 text-2xl text-[#f0cf82]">רשומות שנאספו</h3><div className="grid gap-4 md:grid-cols-2">{save.journal.map((entry) => <article key={entry.id} className="parchment-panel p-4"><h4 className="display-font text-xl">{entry.title}</h4><p className="mt-2 text-sm leading-6">{entry.body}</p></article>)}</div></section> : null}
+  </div>;
 }
 
 const merchantItemIds = ["minor-healing-potion", "village-torch", "soldier-rope", "chain-shirt"];
 function MerchantPanel({ save, onBuy }: { save: SaveData; onBuy: (itemId: string) => void }) {
   return <div><div className="mb-4 flex items-center justify-between border border-[#c6a15b]/25 bg-black/20 p-3"><p>מירה הניחה לפניך ציוד שנבדק ותוקן.</p><p className="flex items-center gap-2 text-[#f0cf82]"><Coins className="size-5" aria-hidden="true" /> <bdi>{save.character.gold}</bdi> זהב</p></div><div className="grid gap-3 sm:grid-cols-2">{merchantItemIds.map((itemId) => { const item = itemsById[itemId]; return <article key={item.id} className="glass-inset flex gap-3 p-3">
-    {/* eslint-disable-next-line @next/next/no-img-element -- generated local icon */}
-    <img src={getAssetPath(item.iconAssetKey)} alt="" className="size-20 object-contain" /><div className="flex min-w-0 flex-1 flex-col"><h3 className="font-bold text-[#f2dfb0]">{item.name}</h3><p className="mt-1 flex-1 text-xs leading-5 text-[#a89f91]">{item.description}</p><GameButton size="sm" className="mt-3" disabled={save.character.gold < item.value} onClick={() => onBuy(item.id)}>רכישה · <bdi>{item.value}</bdi> זהב</GameButton></div></article>; })}</div></div>;
+    <Image src={getAssetPath(item.iconAssetKey)} alt="" width={80} height={80} sizes="80px" className="size-20 object-contain" /><div className="flex min-w-0 flex-1 flex-col"><h3 className="font-bold text-[#f2dfb0]">{item.name}</h3><p className="mt-1 flex-1 text-xs leading-5 text-[#a89f91]">{item.description}</p><GameButton size="sm" className="mt-3" disabled={save.character.gold < item.value} onClick={() => onBuy(item.id)}>רכישה · <bdi>{item.value}</bdi> זהב</GameButton></div></article>; })}</div></div>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) { return <div className="border border-white/10 bg-black/20 p-3"><dt className="text-xs text-[#9e968a]">{label}</dt><dd className="mt-1 font-bold">{value}</dd></div>; }
