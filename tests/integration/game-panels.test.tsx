@@ -45,6 +45,18 @@ describe("פאנלי המשחק", () => {
     expect(screen.getByText("חרב ברזל מאוזנת")).toBeInTheDocument();
   });
 
+  it("מציג את האטלס האינטראקטיבי במקום גלריית מיקומים", () => {
+    const handlers = callbacks();
+    const save = migrateSave(makeSaveV1());
+
+    render(<GamePanels panel="map" save={save} {...handlers} />);
+
+    expect(screen.getByRole("dialog", { name: "מפת ערפלון" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "הדרכים שמתחת לערפל" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "שכבות האטלס" })).toBeInTheDocument();
+    expect(screen.getByTestId("atlas-fog")).toBeInTheDocument();
+  });
+
   it("משמר את פעולת הרכישה ומסביר כשאין מספיק זהב", async () => {
     const user = userEvent.setup();
     const handlers = callbacks();

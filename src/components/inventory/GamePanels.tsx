@@ -12,7 +12,6 @@ import {
   FlaskConical,
   Gem,
   Hammer,
-  MapPin,
   ScrollText,
   Shield,
   ShieldCheck,
@@ -30,6 +29,7 @@ import { GameButton } from "@/components/ui/GameButton";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { CharacterPortrait } from "@/components/character/CharacterPortrait";
+import { FantasyAtlas } from "@/components/map/FantasyAtlas";
 import { ArtDirectedPicture } from "@/components/ui/ArtDirectedPicture";
 import { itemsById } from "@/content/items";
 import { questsById } from "@/content/quests";
@@ -169,11 +169,16 @@ export function GamePanels({
   if (!panel) return null;
 
   return (
-    <Modal open title={panelTitles[panel]} onClose={onClose} className="sm:max-w-6xl">
+    <Modal
+      open
+      title={panelTitles[panel]}
+      onClose={onClose}
+      className={panel === "map" ? "sm:max-w-[min(96vw,96rem)]" : "sm:max-w-6xl"}
+    >
       {panel === "inventory" ? <InventoryPanel save={save} onEquip={onEquip} onUnequip={onUnequip} onUse={onUse} onDrop={onDrop} /> : null}
       {panel === "character" ? <CharacterPanel save={save} /> : null}
       {panel === "quests" ? <QuestPanel save={save} /> : null}
-      {panel === "map" ? <MapPanel save={save} /> : null}
+      {panel === "map" ? <FantasyAtlas save={save} /> : null}
       {panel === "journal" ? <JournalPanel save={save} /> : null}
       {panel === "settings" ? <SettingsPanel /> : null}
       {panel === "merchant" ? <MerchantPanel save={save} onBuy={onBuy} /> : null}
@@ -576,49 +581,6 @@ function QuestPanel({ save }: { save: SaveData }) {
       {!visibleQuests.length ? (
         <EmptyState icon={ScrollText} title="אין משימות פתוחות" description="רמזים ושיחות חדשות יופיעו כאן כאשר המסע יתקדם." />
       ) : null}
-    </div>
-  );
-}
-
-function MapPanel({ save }: { save: SaveData }) {
-  const visitedIds = new Set(save.story.visitedLocationIds);
-
-  return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#c6a15b]/20 pb-3">
-        <div>
-          <p className="text-[10px] font-bold tracking-[.2em] text-[#7ed8ec]/70">ארצות שנחשפו מן הערפל</p>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#aaa294]">המפה מתעדכנת עם כל שביל, שמועה ומעבר שנמצאו במסע.</p>
-        </div>
-        <span className="border border-[#c6a15b]/25 bg-black/20 px-3 py-1.5 text-xs text-[#d9c18b]"><bdi>{save.discoveredLocationIds.length}</bdi> מקומות התגלו</span>
-      </div>
-      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-        {save.discoveredLocationIds.map((locationId) => {
-          const location = locationsById[locationId];
-          if (!location) return null;
-          const current = location.id === save.story.currentLocationId;
-          const visited = visitedIds.has(location.id);
-          return (
-            <article key={location.id} className={`group relative aspect-[16/10] min-h-44 overflow-hidden border bg-black shadow-[0_12px_28px_rgba(0,0,0,.32)] ${current ? "border-[#f0cf82]/80 ring-1 ring-[#f0cf82]/25 sm:col-span-2 lg:col-span-2" : "border-white/15"}`}>
-              <ArtDirectedPicture
-                desktopSrc={getAssetPath(location.backgroundAssetKey)}
-                mobileSrc={getAssetPath(`${location.backgroundAssetKey}-mobile`)}
-                alt={`נוף של ${location.name}`}
-                pictureClassName="absolute inset-0"
-                className="scale-[1.01] object-cover opacity-80 transition-[transform,opacity] duration-500 motion-safe:group-hover:scale-[1.035] motion-safe:group-hover:opacity-95 motion-reduce:transition-none"
-              />
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(2,4,6,.98)_0%,rgba(2,4,6,.7)_34%,transparent_76%),linear-gradient(90deg,rgba(0,0,0,.34),transparent_55%)]" aria-hidden="true" />
-              {current ? <div className="absolute start-3 top-3 inline-flex items-center gap-1.5 border border-[#77b686]/45 bg-[#10251a]/90 px-2 py-1 text-[10px] font-bold text-[#9bd6a8]"><MapPin className="size-3" aria-hidden="true" />המיקום הנוכחי</div> : null}
-              <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
-                <p className="text-[9px] font-bold tracking-[.16em] text-[#7ed8ec]/75">{visited ? "נתיב מוכר" : "סימון חדש במפה"}</p>
-                <h3 className="display-font mt-0.5 break-words text-xl leading-tight text-[#f2dfb0] sm:text-2xl">{location.name}</h3>
-                <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-5 text-[#c6bdae]">{location.description}</p>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-      {!save.discoveredLocationIds.length ? <EmptyState icon={MapPin} title="המפה עדיין מכוסה בערפל" description="המקום הראשון יופיע כאן לאחר שתצא לדרך." /> : null}
     </div>
   );
 }

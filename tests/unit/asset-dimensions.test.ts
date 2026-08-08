@@ -24,6 +24,11 @@ describe("חדות נכסי רסטר", () => {
       if (filename === "social-preview.webp") {
         expect(metadata.width, asset.key).toBeGreaterThanOrEqual(1200);
         expect(metadata.height, asset.key).toBeGreaterThanOrEqual(630);
+      } else if (filename === "mistvale-atlas-mobile.webp") {
+        // The mobile atlas intentionally retains its full landscape extent so
+        // the internally pannable map never crops away a route or landmark.
+        expect(metadata.width, asset.key).toBeGreaterThanOrEqual(1440);
+        expect(metadata.height, asset.key).toBeGreaterThanOrEqual(960);
       } else if (filename.endsWith("-mobile.webp")) {
         expect(metadata.width, asset.key).toBeGreaterThanOrEqual(1152);
         expect(metadata.height, asset.key).toBeGreaterThanOrEqual(1440);

@@ -18,6 +18,7 @@ Read the relevant interfaces in `src/types/game.ts` and use them directly. The k
 | Dialogues | `src/content/dialogues.ts` | `DialogueNode` |
 | Quests | `src/content/quests.ts` | `Quest` |
 | Locations | `src/content/locations.ts` | `Location` |
+| Atlas topology | `src/content/atlas.ts` | `AtlasNodeDefinition`, `AtlasRouteDefinition` |
 | Enemies and encounters | `src/content/enemies.ts` | `Enemy`, `Encounter` |
 | Chapters and scenes | `src/content/chapters/` | `ChapterDefinition`, `SceneDefinition` |
 | Visual assets | `src/lib/assets/manifest.ts` | `AssetManifestEntry` |
@@ -87,6 +88,12 @@ The canonical production manifest is `src/lib/assets/manifest.ts`. Runtime conte
 The art-v2 production scripts use Sharp with Lanczos resizing, gentle sharpening, high-quality WebP and no repeated lossy recompression. Run `npm run assets:build` to produce 1920×1080 desktop scenes, 1440×1800 mobile scenes, 960×1200 portraits, 1280×720 class previews and 384×384 special icons. Keep the social preview at `1200×630`. Compare representative dark and high-detail scenes at their actual UI size, then run `npm run test:unit`, `npm run build`, and the desktop/mobile browser smoke tests.
 
 Locally hosted fonts and code-rendered icon libraries are assets too. Record their exact package or file path, upstream project, license, required notice, and modifications in `ASSET_CREDITS.md`, even though they do not belong in the scene-art manifest.
+
+## Adding a location to the atlas
+
+Every chapter location that should appear on the campaign map needs an `AtlasNodeDefinition` in `src/content/atlas.ts`. Choose its surface or depths layer and place it in normalized `0..100` coordinates over the shared atlas artwork. Add each physical connection as an `AtlasRouteDefinition`; use `requiresAll` for routes unlocked by a story flag and `secret: true` for routes that must never be revealed before discovery. Cross-layer connections belong in `atlasPassages`.
+
+Do not reveal a node by setting atlas-only client state. Discovery comes from the canonical save's current, discovered, or visited location IDs. Persistent visible consequences use a story flag present in `src/content/consequences.ts` plus a matching `atlasAnnotationAnchors` entry. Add unit coverage for hidden nodes, route requirements, passages, and annotation visibility whenever the graph changes.
 
 Example keys:
 

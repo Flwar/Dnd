@@ -497,7 +497,7 @@ function AnimatedDie({
           rotateX: -105 * direction,
           rotateY: (135 + variation * 24) * direction,
           rotateZ: -32 * direction,
-          y: -52,
+          y: -26,
           scale: 0.5,
         }}
         animate={settled || reducedMotion ? {
@@ -511,7 +511,7 @@ function AnimatedDie({
           rotateX: [-105 * direction, 310 * direction, -690 * direction, 0],
           rotateY: [(135 + variation * 24) * direction, -270 * direction, 620 * direction, 0],
           rotateZ: [-32 * direction, 120 * direction, -72 * direction, 0],
-          y: [-52, 16, -14, 0],
+          y: [-26, 12, -10, 0],
           x: [index === 0 ? -12 : 12, index === 0 ? 7 : -7, 0],
           scale: [0.5, 1.04, 0.9, 1],
         }}
@@ -553,15 +553,31 @@ function DiceRollResult({
   const outcomeTheme = outcomes[result.outcome];
   const [settled, setSettled] = useState(reducedMotion);
   const revealSoundPlayed = useRef(false);
+  const settleTimer = useRef<number | null>(null);
   const critical = result.outcome === "critical-success" || result.outcome === "critical-failure";
   const displayedRolls = result.mode === "normal" ? [result.selectedRoll] : result.rolls.slice(0, 2);
   const selectedIndex = Math.max(0, displayedRolls.findIndex((roll) => roll === result.selectedRoll));
   const dual = displayedRolls.length > 1;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setSettled(true), reducedMotion ? 0 : 1540);
-    return () => window.clearTimeout(timer);
+    const timer = window.setTimeout(() => {
+      if (settleTimer.current === timer) settleTimer.current = null;
+      setSettled(true);
+    }, reducedMotion ? 0 : 1540);
+    settleTimer.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (settleTimer.current === timer) settleTimer.current = null;
+    };
   }, [reducedMotion]);
+
+  const finishRoll = useCallback(() => {
+    if (settleTimer.current !== null) {
+      window.clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
+    setSettled(true);
+  }, []);
 
   useEffect(() => {
     if (!settled || revealSoundPlayed.current) return;
@@ -570,14 +586,22 @@ function DiceRollResult({
   }, [settled, outcomeTheme.revealSound]);
 
   return (
-    <div className="text-center" data-animation-state={settled ? "settled" : "rolling"}>
-      <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-[#c9bea9] sm:text-sm">{presentation.skillLabel}</p>
-      <ModeBadge result={result} />
+    <div
+      className="grid min-w-0 grid-rows-[auto_15.5rem_auto] text-center sm:grid-rows-[auto_17rem_auto]"
+      data-animation-state={settled ? "settled" : "rolling"}
+      data-layout="reserved-dice-stage"
+      data-testid="dice-roll-layout"
+    >
+      <div className="relative z-20 min-w-0" data-testid="dice-context-panel">
+        <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-[#c9bea9] sm:text-sm">{presentation.skillLabel}</p>
+        <ModeBadge result={result} />
+      </div>
 
       <div
-        className={`relative mx-auto my-1 flex items-center justify-center gap-1 [perspective:1100px] sm:my-3 sm:gap-3 ${dual ? "min-h-[10rem] w-full" : "min-h-[11rem] sm:min-h-[13.5rem]"}`}
+        className="relative isolate mx-auto flex h-full w-full max-w-[32rem] items-center justify-center gap-1 overflow-hidden [perspective:1100px] sm:gap-3"
         data-testid="dice-stage"
         data-dice-count={displayedRolls.length}
+        data-overflow-boundary="true"
       >
         <div
           aria-hidden="true"
@@ -604,6 +628,7 @@ function DiceRollResult({
         ))}
       </div>
 
+      <section className="relative z-20 min-w-0" data-testid="dice-result-panel" aria-label="תוצאת בדיקת המיומנות">
       <div className="min-h-11" aria-live="polite" aria-atomic="true">
         {settled ? (
           <motion.div initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
@@ -654,10 +679,11 @@ function DiceRollResult({
         className="mt-3 w-full sm:mt-4"
         variant={settled ? "primary" : "secondary"}
         sound={settled ? "confirm" : "dice"}
-        onClick={settled ? onClose : () => setSettled(true)}
+        onClick={settled ? onClose : finishRoll}
       >
         {settled ? "המשך" : "דלג לתוצאה"}
       </GameButton>
+      </section>
     </div>
   );
 }

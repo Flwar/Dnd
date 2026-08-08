@@ -1,4 +1,5 @@
 export * from "./abilities";
+export * from "./atlas";
 export { assetManifest, assetManifestByKey } from "../lib/assets/manifest";
 export * from "./backgrounds";
 export * from "./chapters";

@@ -31,6 +31,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useSettingsStore.setState({ reducedMotion: false });
+  vi.restoreAllMocks();
 });
 
 function presentation(overrides: Partial<DiceResult> = {}): DicePresentation {
@@ -73,6 +74,26 @@ describe("הצגת גלגול קוביית d20", () => {
     const rotatingBody = screen.getByTestId("d20-rotating-body");
     expect(rotatingBody).not.toContainElement(shadow);
     expect(rotatingBody.parentElement).toBe(shadow.parentElement?.parentElement);
+  });
+
+  it("שומרת במה נפרדת לקובייה כדי שלא תכסה את פרטי הבדיקה במסך צר או רחב", () => {
+    render(<DiceOverlay presentation={presentation()} onClose={vi.fn()} />);
+
+    const layout = screen.getByTestId("dice-roll-layout");
+    const contextPanel = screen.getByTestId("dice-context-panel");
+    const stage = screen.getByTestId("dice-stage");
+    const resultPanel = screen.getByTestId("dice-result-panel");
+
+    expect(layout).toHaveAttribute("data-layout", "reserved-dice-stage");
+    expect(layout).toHaveClass("grid-rows-[auto_15.5rem_auto]", "sm:grid-rows-[auto_17rem_auto]");
+    expect(Array.from(layout.children)).toEqual([contextPanel, stage, resultPanel]);
+    expect(stage).toHaveClass("h-full", "overflow-hidden", "isolate");
+    expect(stage).toHaveAttribute("data-overflow-boundary", "true");
+    expect(stage).not.toContainElement(contextPanel);
+    expect(stage).not.toContainElement(resultPanel);
+    expect(contextPanel).toHaveTextContent("תפיסה");
+    expect(resultPanel).toHaveTextContent("דרגת קושי15");
+    expect(resultPanel).toHaveTextContent("תוצאה סופית: 21");
   });
 
   it("מבדילה בין יתרון לחיסרון ומציגה את שתי ההטלות", () => {
@@ -126,6 +147,7 @@ describe("הצגת גלגול קוביית d20", () => {
     useSettingsStore.setState({ reducedMotion: false });
     const user = userEvent.setup();
     const onClose = vi.fn();
+    const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
     render(<DiceOverlay presentation={presentation()} onClose={onClose} />);
 
     expect(screen.getByText("דלג לתוצאה")).toBeInTheDocument();
@@ -137,6 +159,7 @@ describe("הצגת גלגול קוביית d20", () => {
     await user.click(screen.getByRole("button", { name: "דלג לתוצאה" }));
 
     expect(onClose).not.toHaveBeenCalled();
+    expect(clearTimeoutSpy).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "המשך" })).toBeInTheDocument();
     expect(screen.getByText("הצלחה")).toBeInTheDocument();
     expect(screen.getByTestId("d20-front-value")).toHaveTextContent("17");

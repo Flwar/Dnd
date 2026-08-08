@@ -9,11 +9,12 @@ The repository is designed for Next.js on Vercel or Cloudflare Workers through O
 - Hebrew account registration, login, logout, recovery, and password-reset flows backed by Supabase Auth.
 - Protected menu and character routes using server-validated Supabase sessions.
 - A seven-step character creator with six races, six public classes, the account-bound King class, seven backgrounds, point buy, portrait upload, local draft resilience, and authoritative database creation.
-- Authored 70–120 minute opening-chapter content for ערפלון: 16 explorable locations across 13 story scenes, reactive NPCs, branching consequences, quests, items, two regular encounters, a scaled tactical boss, and a return-to-village resolution.
+- Authored 85–140 minute opening-chapter content for ערפלון: 18 explorable locations across 15 story scenes, reactive NPCs, branching consequences, quests, items, two regular encounters, a scaled tactical boss, and a multi-stage return-to-village resolution.
 - Shared TypeScript rules for character building, d20 checks, inventory and equipment, quests, progression, combat, save migration, and party-command validation.
 - PostgreSQL migrations with relational character state, versioned save snapshots, party sessions, command/event streams, idempotent rewards, indexes, constraints, and RLS.
 - Local art-directed WebP art for every scene, race portrait, NPC portrait, class preview, King ability, and content icon—with an automated no-placeholder contract. See [ASSET_CREDITS.md](./ASSET_CREDITS.md).
 - Responsive Hebrew game UI components, reduced-motion support, local fonts, and a browser-safe procedural Web Audio manager.
+- A two-layer cinematic atlas with fog of war, pan and zoom, route discovery, persistent consequence markers, and a mobile detail layout that never covers the map.
 - Vitest, React Testing Library, pgTAP-style SQL security checks, and Playwright configuration.
 
 Detailed boundaries and data flows are in [ARCHITECTURE.md](./ARCHITECTURE.md). Instructions for extending authored content are in [CONTENT_GUIDE.md](./CONTENT_GUIDE.md).
@@ -22,7 +23,7 @@ Detailed boundaries and data flows are in [ARCHITECTURE.md](./ARCHITECTURE.md). 
 
 The application, database migration, deterministic game rules, authored chapter, server actions, Supabase adapters, Realtime subscriptions, Vercel workflow, and Cloudflare OpenNext configuration are implemented in source. `npm run db:validate` can verify migration loading, seed loading, character creation, transactional relational save synchronization, and idempotent save replay without Docker.
 
-Release 1.2.0 is deployed on Vercel at [shattered-crown-il.vercel.app](https://shattered-crown-il.vercel.app). The public menu, registration validation, responsive mobile shell, authenticated saved-character continuation, King account presentation, and production asset delivery were exercised in real browsers on that deployment. Runtime credentials remain managed outside Git. Fresh confirmation-email delivery and the complete two-user Realtime party flow still require an isolated hosted release test and must not be inferred from a successful build.
+Release 1.5.0 is the current release for [shattered-crown-il.vercel.app](https://shattered-crown-il.vercel.app). Its atlas was exercised at desktop and mobile widths with RTL, keyboard navigation, reduced motion, fog-of-war states, zooming and no page-level horizontal overflow. Runtime credentials remain managed outside Git. Fresh confirmation-email delivery and the complete two-user Realtime party flow still require an isolated hosted release test and must not be inferred from a successful build.
 
 ## Stack
 
@@ -217,7 +218,7 @@ Set `PLAYWRIGHT_BASE_URL` to exercise an already-running preview or deployed ori
 
 ## Deploying to Vercel
 
-The current production release is **1.2.0** at [shattered-crown-il.vercel.app](https://shattered-crown-il.vercel.app). The instructions below describe how to reproduce or replace that deployment without committing its credentials.
+The current production release is **1.5.0** at [shattered-crown-il.vercel.app](https://shattered-crown-il.vercel.app). The instructions below describe how to reproduce or replace that deployment without committing its credentials.
 
 Provision and migrate Supabase first. The Vercel Supabase Marketplace integration supplies `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and PostgreSQL connection variables automatically. If configuring the project manually, add the same variables for Preview and Production and keep all secret/database values server-only.
 
@@ -309,11 +310,11 @@ After the first deployment, add `https://YOUR_WORKER_OR_DOMAIN/auth/callback` to
 - Cloudflare R2 incremental caching is not configured. Current authenticated game routes are dynamic and persistent game data remains in Supabase.
 - OpenNext's native Windows toolchain can be less reliable than Linux; use WSL or Linux CI for the release build if `cf:build` fails for a platform-path reason.
 - Live single-player and two-user party Playwright flows are skipped when their isolated account variables are absent. A skipped live test is not a hosted verification pass.
-- Release 1.2.0 passed the OpenNext/Wrangler production-bundle dry run, but it has not been uploaded to Cloudflare because this workstation has no authenticated Wrangler account or scoped `CLOUDFLARE_API_TOKEN`.
+- Release 1.2.0 passed the OpenNext/Wrangler production-bundle dry run, but it has not been uploaded to Cloudflare because this workstation has no authenticated Wrangler account or scoped `CLOUDFLARE_API_TOKEN`. Release 1.5.0 passed the normal Next.js production build; its OpenNext dry run reached the adapter build and then hit OpenNext's documented native-Windows path-normalization limitation, so it still needs the same Linux/WSL release gate before a Cloudflare upload.
 
 ## Verification boundary
 
-The repository does not contain live Supabase, Vercel, or Cloudflare credentials. Vercel production hosting and one existing authenticated saved-character session were verified for release 1.2.0. Fresh hosted confirmation-email delivery, RLS between two new users, and Realtime behavior across two independent remote clients remain externally unverified. Local deterministic tests, `db:validate`, `next build`, and `cf:dry-run` reduce risk but do not replace those isolated release checks.
+The repository does not contain live Supabase, Vercel, or Cloudflare credentials. Vercel production hosting, the public shell, local authenticated atlas states, and one existing authenticated saved-character session have been exercised across the release line through 1.5.0. Fresh hosted confirmation-email delivery, RLS between two new users, and Realtime behavior across two independent remote clients remain externally unverified. Local deterministic tests, `db:validate`, and `next build` reduce risk but do not replace those isolated release checks.
 
 ## Content and asset licensing
 
