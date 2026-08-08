@@ -57,6 +57,49 @@ describe("בחירת דיוקן והעלאה אישית", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/character-portraits", expect.objectContaining({ method: "POST" }));
   });
 
+  it("מכווץ תמונת מצלמה גדולה לפני שהיא נשלחת לשרת", async () => {
+    const onSelect = vi.fn();
+    const uploadedFiles: File[] = [];
+    const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      uploadedFiles.push((init?.body as FormData).get("file") as File);
+      return Promise.resolve(new Response(JSON.stringify({
+        portraitKey: customKey,
+        portraitUrl: "https://example.supabase.co/storage/portrait.webp",
+      }), { status: 201, headers: { "Content-Type": "application/json" } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({
+      width: 4_032,
+      height: 3_024,
+      close: vi.fn(),
+    }));
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:https://example.test/large-preview") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: "high",
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback, type) => {
+      callback(new Blob([new Uint8Array(48_000)], { type: type ?? "image/webp" }));
+    });
+    render(<PortraitPicker race={race} selected={race.portraitKeys[0]} onSelect={onSelect} />);
+
+    await userEvent.click(screen.getByTestId("portrait-mode-upload"));
+    const source = new File(
+      [new Uint8Array(2 * 1024 * 1024 + 1)],
+      "camera.png",
+      { type: "image/png" },
+    );
+    await userEvent.upload(screen.getByTestId("portrait-upload-input"), source);
+
+    await waitFor(() => expect(onSelect).toHaveBeenCalled());
+    expect(uploadedFiles[0]).toBeDefined();
+    expect(uploadedFiles[0]?.type).toBe("image/webp");
+    expect(uploadedFiles[0]?.size).toBeLessThan(source.size);
+  });
+
   it("מסיר תמונה אישית וחוזר לברירת המחדל של הגזע", async () => {
     const onSelect = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {

@@ -54,6 +54,7 @@ export function CharacterCreator({ isKing = false }: { isKing?: boolean }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [draft, setDraft] = useState<CharacterDraftInput>(defaultDraft);
   const [customPortraitUrl, setCustomPortraitUrl] = useState<string | null>(null);
+  const [portraitBusy, setPortraitBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const step = steps[stepIndex];
@@ -117,7 +118,6 @@ export function CharacterCreator({ isKing = false }: { isKing?: boolean }) {
       if (!response.ok) { setError(response.message); return; }
       sessionStorage.removeItem("shattered-crown-character-draft");
       router.push(`/game/${response.characterId}?opening=1`);
-      router.refresh();
     });
   };
 
@@ -126,7 +126,7 @@ export function CharacterCreator({ isKing = false }: { isKing?: boolean }) {
       <div className="mx-auto max-w-6xl">
         <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div><p className="text-xs font-bold tracking-[0.22em] text-[#62c6df]">חריטת גורל חדש</p><h1 className="display-font text-4xl text-[#f0cf82] sm:text-5xl">{he.characterCreation.title}</h1></div>
-          <GameButton variant="ghost" onClick={() => router.push("/menu")}>שמירה ויציאה</GameButton>
+          <GameButton variant="ghost" disabled={portraitBusy || pending} onClick={() => router.push("/menu")}>שמירה ויציאה</GameButton>
         </header>
 
         <ol className="mb-6 grid grid-cols-7 gap-1" aria-label="שלבי יצירת הדמות">
@@ -135,7 +135,7 @@ export function CharacterCreator({ isKing = false }: { isKing?: boolean }) {
               <button
                 className={`min-h-12 w-full border px-1 text-xs transition-colors sm:text-sm ${index === stepIndex ? "border-[#f0cf82] bg-[#c6a15b]/18 text-[#fff0c7]" : index < stepIndex ? "border-[#77b686]/35 bg-[#77b686]/8 text-[#bee1c6]" : "border-white/10 bg-black/20 text-[#807a72]"}`}
                 onClick={() => index <= stepIndex && setStepIndex(index)}
-                disabled={index > stepIndex}
+                disabled={portraitBusy || index > stepIndex}
                 aria-current={index === stepIndex ? "step" : undefined}
               >
                 <span className="hidden sm:inline">{he.characterCreation.steps[item]}</span><span className="sm:hidden">{index + 1}</span>
@@ -152,7 +152,7 @@ export function CharacterCreator({ isKing = false }: { isKing?: boolean }) {
               {step === "class" ? <ClassStep selected={draft.classId} isKing={isKing} onSelect={(classId) => update("classId", classId)} /> : null}
               {step === "background" ? <BackgroundStep selected={draft.backgroundId} onSelect={(backgroundId) => update("backgroundId", backgroundId)} /> : null}
               {step === "attributes" ? <AttributesStep attributes={draft.attributes} race={race} remaining={pointsRemaining} onChange={(attributes) => update("attributes", attributes)} /> : null}
-              {step === "appearance" ? <AppearanceStep race={race} selected={draft.portraitKey} selectedPortraitUrl={customPortraitUrl} onSelect={choosePortrait} /> : null}
+              {step === "appearance" ? <AppearanceStep race={race} selected={draft.portraitKey} selectedPortraitUrl={customPortraitUrl} onSelect={choosePortrait} onBusyChange={setPortraitBusy} /> : null}
               {step === "summary" ? <SummaryStep draft={draft} portraitUrl={customPortraitUrl} attributes={finalAttributes} derived={derived} /> : null}
             </motion.div>
           </AnimatePresence>
@@ -160,9 +160,9 @@ export function CharacterCreator({ isKing = false }: { isKing?: boolean }) {
 
         {error ? <p className="mt-4 border border-[#d05b54]/45 bg-[#d05b54]/10 p-3 text-[#ffc0ba]" role="alert">{error}</p> : null}
         <footer className="mt-5 flex items-center justify-between gap-3">
-          <GameButton variant="secondary" onClick={() => setStepIndex((value) => Math.max(0, value - 1))} disabled={stepIndex === 0}><ChevronRight className="size-5" aria-hidden="true" />חזרה</GameButton>
+          <GameButton variant="secondary" onClick={() => setStepIndex((value) => Math.max(0, value - 1))} disabled={stepIndex === 0 || portraitBusy}><ChevronRight className="size-5" aria-hidden="true" />חזרה</GameButton>
           <p className="hidden text-sm text-[#8f877a] sm:block">הטיוטה נשמרת אוטומטית במכשיר עד סיום היצירה.</p>
-          {step === "summary" ? <GameButton size="lg" loading={pending} onClick={submit}><Sparkles className="size-5" aria-hidden="true" />{he.characterCreation.startJourney}</GameButton> : <GameButton onClick={next}>הבא<ChevronLeft className="size-5" aria-hidden="true" /></GameButton>}
+          {step === "summary" ? <GameButton size="lg" loading={pending} onClick={submit}><Sparkles className="size-5" aria-hidden="true" />{he.characterCreation.startJourney}</GameButton> : <GameButton disabled={portraitBusy} onClick={next}>הבא<ChevronLeft className="size-5" aria-hidden="true" /></GameButton>}
         </footer>
       </div>
     </main>
@@ -247,8 +247,8 @@ function AttributesStep({ attributes, race, remaining, onChange }: { attributes:
   return <div><StepHeading title="עיצוב התכונות" text="הקצו עשרים ושבע נקודות. ציונים גבוהים עולים יותר ומשפיעים מיד על החיים, הדיוק והתושייה." /><div className="mb-5 flex items-center justify-between border border-[#c6a15b]/25 bg-black/25 p-4"><span>{he.characterCreation.pointsRemaining}</span><strong className={`display-font text-3xl ${remaining < 0 ? "text-[#d05b54]" : "text-[#f0cf82]"}`}><bdi className="ltr-isolate">{remaining}</bdi></strong></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(Object.keys(attributeLabels) as AttributeKey[]).map((key) => { const bonus = race.attributeEffects[key] ?? 0; return <div key={key} className="glass-inset p-4"><div className="mb-3 flex items-center justify-between"><b>{attributeLabels[key]}</b>{bonus ? <span className="text-xs text-[#77b686]">תוסף גזע +{bonus}</span> : null}</div><div className="flex items-center justify-between gap-3"><GameButton size="icon" variant="secondary" onClick={() => adjust(key, -1)} disabled={attributes[key] <= 8} aria-label={`הפחתת ${attributeLabels[key]}`}><Minus className="size-4" /></GameButton><strong className="display-font text-3xl"><bdi className="ltr-isolate">{attributes[key] + bonus}</bdi></strong><GameButton size="icon" variant="secondary" onClick={() => adjust(key, 1)} disabled={attributes[key] >= 15} aria-label={`הגדלת ${attributeLabels[key]}`}><Plus className="size-4" /></GameButton></div></div>; })}</div></div>;
 }
 
-function AppearanceStep({ race, selected, selectedPortraitUrl, onSelect }: { race: (typeof characterRaces)[number]; selected: string; selectedPortraitUrl: string | null; onSelect: (key: string, portraitUrl?: string | null) => void }) {
-  return <div><StepHeading title="פנים למסע" text="בחרו דיוקן מעולם המשחק או העלו תמונה אישית שתופיע בדיאלוגים, בקרב ובחבורה." /><PortraitPicker race={race} selected={selected} selectedPortraitUrl={selectedPortraitUrl} onSelect={onSelect} /></div>;
+function AppearanceStep({ race, selected, selectedPortraitUrl, onSelect, onBusyChange }: { race: (typeof characterRaces)[number]; selected: string; selectedPortraitUrl: string | null; onSelect: (key: string, portraitUrl?: string | null) => void; onBusyChange: (busy: boolean) => void }) {
+  return <div><StepHeading title="פנים למסע" text="בחרו דיוקן מעולם המשחק או העלו תמונה אישית שתופיע בדיאלוגים, בקרב ובחבורה." /><PortraitPicker race={race} selected={selected} selectedPortraitUrl={selectedPortraitUrl} onSelect={onSelect} onBusyChange={onBusyChange} /></div>;
 }
 
 function SummaryStep({ draft, portraitUrl, attributes, derived }: { draft: CharacterDraftInput; portraitUrl: string | null; attributes: Attributes; derived: ReturnType<typeof deriveStats> }) {

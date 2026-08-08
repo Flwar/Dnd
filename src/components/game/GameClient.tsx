@@ -83,6 +83,8 @@ const sceneByLocation: Record<string, string> = {
   "pillar-hall": "scene-cult-evidence",
   "hidden-chamber": "scene-hidden-area",
   "guardian-sanctum": "scene-stone-guardian",
+  "bell-tower-roof": "scene-first-night-watch",
+  "moonwell-undercrypt": "scene-chapter-completion",
 };
 
 const encounterVictoryFlags: Record<string, string> = {
@@ -747,7 +749,7 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
         }
         const currentSceneId = partyGame.scene?.authoredId;
         const targetSceneId = exit.destinationId === "arfelon-square" && saveRef.current.story.flags.vision_seen
-          ? "scene-chapter-completion"
+          ? "scene-return-to-arfelon"
           : sceneByLocation[exit.destinationId];
         if (
           currentSceneId &&
@@ -765,7 +767,7 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     const newlyDiscovered = !current.discoveredLocationIds.includes(exit.destinationId);
     let next = travelToLocation(current, exit.destinationId);
     const targetSceneId = exit.destinationId === "arfelon-square" && current.story.flags.vision_seen
-      ? "scene-chapter-completion"
+      ? "scene-return-to-arfelon"
       : sceneByLocation[exit.destinationId];
     next = { ...next, story: { ...next.story, currentSceneId: targetSceneId ?? next.story.currentSceneId } };
     next = applyEffects(next, progressEffectsForLocation(exit.destinationId), `travel:${exit.destinationId}`);
@@ -908,7 +910,12 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     void commit(next, "opening-cinematic-completed", true);
   }, [commit, setCinematicOpen]);
 
-  const returnToMenu = useCallback(async () => { await commit(saveRef.current, "return-to-menu"); router.push("/menu"); }, [commit, router]);
+  const returnToMenu = useCallback(() => {
+    // commit writes the resilient local snapshot before starting the cloud
+    // request. Navigation must not be held hostage by a stalled save call.
+    void commit(saveRef.current, "return-to-menu").catch(() => undefined);
+    router.push("/menu");
+  }, [commit, router]);
 
   const retryCombat = useCallback(() => {
     if (!combat) return;

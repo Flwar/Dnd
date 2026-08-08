@@ -1,5 +1,8 @@
 export const CHARACTER_PORTRAIT_BUCKET = "character-portraits";
 export const MAX_CHARACTER_PORTRAIT_BYTES = 2 * 1024 * 1024;
+export const MAX_PORTRAIT_SOURCE_BYTES = 12 * 1024 * 1024;
+export const TARGET_OPTIMIZED_PORTRAIT_BYTES = 1_850_000;
+export const MAX_PORTRAIT_EDGE_PIXELS = 2_048;
 
 export type CharacterPortraitExtension = "jpg" | "png" | "webp";
 export type CharacterPortraitMime = "image/jpeg" | "image/png" | "image/webp";

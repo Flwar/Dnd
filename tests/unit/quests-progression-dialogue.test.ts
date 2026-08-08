@@ -79,6 +79,20 @@ describe("מערכת משימות", () => {
     expect(first.granted).toBe(true);
     expect(second.granted).toBe(false);
   });
+
+  it("משלים את משימת הלילה הראשון רק לאחר כל שלוש ההכרעות הפעילות", () => {
+    const quest = questsById["the-bell-without-a-hand"];
+    let state = createQuestState(quest, now);
+    for (const objectiveId of ["hear-midnight-bell", "choose-village-defense", "decode-the-bell", "read-the-omen"]) {
+      state = setObjectiveStatus(state, quest, objectiveId, "completed", now).state;
+    }
+    expect(state.status).toBe("active");
+
+    state = setObjectiveStatus(state, quest, "choose-the-northern-path", "completed", now).state;
+    expect(state.status).toBe("completed");
+    expect(state.objectives["find-the-traitor-keeper"]).toBe("hidden");
+    expect(quest.rewards).toEqual({ experience: 140, gold: 30, itemIds: ["minor-healing-potion"], reputation: 3 });
+  });
 });
 
 describe("יחסים והשפעות סיפור", () => {
@@ -124,6 +138,18 @@ describe("יחסים והשפעות סיפור", () => {
       "השומר הוזהר",
     ]);
     expect(consequences[0].detail).toContain("שלושת הסיבובים");
+  });
+
+  it("מציג מיד את תוצאות הגנת הכפר והדרך שנבחרה", () => {
+    const consequences = getVisibleConsequences(
+      { ward_bell_linked: true, arfelon_hidden_by_ward: true },
+      "arfelon-square",
+    );
+    expect(consequences.map((entry) => entry.title)).toEqual([
+      "ערפלון הוסתרה מאחורי הברית",
+      "הפעמון נקשר לאבני הסף",
+    ]);
+    expect(consequences[0].detail).toContain("תוצאה ישירה");
   });
 });
 

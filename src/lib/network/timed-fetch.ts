@@ -6,6 +6,7 @@ type FetchImplementation = typeof globalThis.fetch;
 type TimedFetchOptions = {
   retrySafeRequests?: boolean;
   retryBackoffMs?: number;
+  retryTimeouts?: boolean;
 };
 
 const retryableResponseStatuses = new Set([502, 503, 504]);
@@ -36,8 +37,11 @@ function requestSignal(input: RequestInfo | URL, init?: RequestInit) {
   return undefined;
 }
 
-function isRetryableNetworkError(error: unknown) {
-  if (error instanceof ExternalRequestTimeoutError || error instanceof TypeError) {
+function isRetryableNetworkError(error: unknown, retryTimeouts: boolean) {
+  if (error instanceof ExternalRequestTimeoutError) {
+    return retryTimeouts;
+  }
+  if (error instanceof TypeError) {
     return true;
   }
   return error instanceof DOMException && ["NetworkError", "TimeoutError"].includes(error.name);
@@ -72,6 +76,7 @@ export function createTimedFetch(
     throw new RangeError("timeoutMs must be a positive finite number.");
   }
   const retryBackoffMs = options.retryBackoffMs ?? DEFAULT_SAFE_REQUEST_RETRY_BACKOFF_MS;
+  const retryTimeouts = options.retryTimeouts ?? true;
   if (!Number.isFinite(retryBackoffMs) || retryBackoffMs < 0) {
     throw new RangeError("retryBackoffMs must be a non-negative finite number.");
   }
@@ -114,7 +119,7 @@ export function createTimedFetch(
         const shouldRetry =
           attempt < maximumAttempts &&
           !upstreamSignal?.aborted &&
-          isRetryableNetworkError(resolvedError);
+          isRetryableNetworkError(resolvedError, retryTimeouts);
         if (!shouldRetry) throw resolvedError;
       } finally {
         clearTimeout(timeout);

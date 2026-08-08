@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
-import { ChevronDown, Crown, UserRound, UsersRound, Wifi, WifiOff } from "lucide-react";
-import { assetManifestByKey } from "@/lib/assets/manifest";
+import { ChevronDown, Crown, UsersRound, Wifi, WifiOff } from "lucide-react";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import {
   useOnlinePresence,
   type PresenceConnectionStatus,
@@ -50,30 +49,23 @@ export function OnlinePlayersPanel() {
         <div id="online-players-list" className="border-t border-[#62c6df]/15 px-3 py-3 sm:px-4">
           {players.length ? (
             <ul className="grid max-h-44 gap-2 overflow-y-auto overscroll-contain pe-1 sm:grid-cols-2" aria-label="רשימת השחקנים המחוברים">
-              {players.map((player) => {
-                const avatarPath = assetManifestByKey[player.avatarKey]?.path;
-                return (
-                  <li key={player.userId} className="flex min-w-0 items-center gap-2 border border-white/[0.07] bg-black/20 p-2">
-                    <span className="grid size-9 shrink-0 place-items-center overflow-hidden border border-[#c6a15b]/25 bg-[#151719]">
-                      {avatarPath ? (
-                        <Image src={avatarPath} alt="" width={36} height={36} sizes="36px" className="size-full object-cover" />
-                      ) : (
-                        <UserRound className="size-4 text-[#9e968a]" aria-hidden="true" />
-                      )}
+              {players.map((player) => (
+                <li key={player.userId} className="flex min-w-0 items-center gap-2 border border-white/[0.07] bg-black/20 p-2">
+                  <span className="relative grid size-9 shrink-0 place-items-center overflow-hidden border border-[#c6a15b]/25 bg-[#151719]">
+                    <CharacterPortrait portraitKey={player.avatarKey} alt="" sizes="36px" className="object-cover" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <bdi className="truncate text-sm font-bold text-[#e7dfd2]">{player.displayName}</bdi>
+                      {player.userId === currentUserId ? <span className="shrink-0 text-[0.68rem] text-[#62c6df]">(את/ה)</span> : null}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <bdi className="truncate text-sm font-bold text-[#e7dfd2]">{player.displayName}</bdi>
-                        {player.userId === currentUserId ? <span className="shrink-0 text-[0.68rem] text-[#62c6df]">(את/ה)</span> : null}
-                      </span>
-                      <span className="flex items-center gap-1 truncate text-xs text-[#a89f91]">
-                        {player.isKing ? <Crown className="size-3 shrink-0 text-[#f0cf82]" aria-hidden="true" /> : null}
-                        <span className="truncate">{player.accountTitle ?? "הרפתקן/ית"}</span>
-                      </span>
+                    <span className="flex items-center gap-1 truncate text-xs text-[#a89f91]">
+                      {player.isKing ? <Crown className="size-3 shrink-0 text-[#f0cf82]" aria-hidden="true" /> : null}
+                      <span className="truncate">{player.accountTitle ?? "הרפתקן/ית"}</span>
                     </span>
-                  </li>
-                );
-              })}
+                  </span>
+                </li>
+              ))}
             </ul>
           ) : (
             <p className="py-2 text-center text-sm text-[#9e968a]" role="status">

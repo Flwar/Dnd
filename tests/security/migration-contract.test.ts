@@ -225,7 +225,36 @@ test("custom portraits are owner-scoped, type-limited, and protected while refer
   assert.match(route, /detectCharacterPortraitFile\(bytes\)/);
   assert.match(route, /\.eq\("portrait_key", parsed\.portraitKey\)/);
   assert.match(route, /MAX_CHARACTER_PORTRAIT_BYTES/);
+  assert.match(route, /\.eq\("avatar_key", parsed\.portraitKey\)/);
   assert.doesNotMatch(route, /createServiceRoleSupabaseClient/);
+});
+
+test("custom profile avatars stay owner-scoped and cannot be deleted while referenced", async () => {
+  const migration = await readFile(
+    new URL(
+      "../../supabase/migrations/20260808000300_profile_avatar_uploads.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const profileAction = await readFile(
+    new URL("../../src/lib/actions/profile.ts", import.meta.url),
+    "utf8",
+  );
+  const clientPreparation = await readFile(
+    new URL("../../src/lib/portrait-upload-client.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(migration, /add constraint profiles_avatar_key_check check/i);
+  assert.match(migration, /split_part\(avatar_key, '\/', 1\) = 'custom:' \|\| id::text/i);
+  assert.match(migration, /profile\.avatar_key = 'custom:' \|\| p_object_name/i);
+  assert.match(profileAction, /customAvatar\.ownerId !== data\.user\.id/);
+  assert.match(profileAction, /\.from\(CHARACTER_PORTRAIT_BUCKET\)[\s\S]+\.list\(customAvatar\.ownerId/);
+  assert.match(clientPreparation, /MAX_PORTRAIT_SOURCE_BYTES/);
+  assert.match(clientPreparation, /TARGET_OPTIMIZED_PORTRAIT_BYTES/);
+  assert.match(clientPreparation, /createImageBitmap/);
+  assert.doesNotMatch(clientPreparation, /image\/svg\+xml/);
 });
 
 test("King access is server-provisioned and enforced again inside character creation", async () => {

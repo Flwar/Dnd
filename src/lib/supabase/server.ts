@@ -7,8 +7,12 @@ import { getPublicEnvironment, getServerEnvironment } from "@/lib/env";
 import { createTimedFetch } from "@/lib/network/timed-fetch";
 import type { Database } from "@/types/database";
 
-const supabaseServerFetch = createTimedFetch(5_000, globalThis.fetch, {
+// A stalled backend must release the App Router quickly enough to render the
+// route error boundary. Retrying an explicit 502/503 is useful; retrying a
+// request that already consumed the entire deadline only doubles the loader.
+const supabaseServerFetch = createTimedFetch(3_000, globalThis.fetch, {
   retrySafeRequests: true,
+  retryTimeouts: false,
 });
 
 export async function createServerSupabaseClient() {

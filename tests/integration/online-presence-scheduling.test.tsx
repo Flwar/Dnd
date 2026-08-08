@@ -4,7 +4,7 @@ import { OnlinePresenceProvider } from "@/components/providers/OnlinePresencePro
 
 const supabaseMocks = vi.hoisted(() => ({
   rpc: vi.fn(),
-  getUser: vi.fn(),
+  getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
   unsubscribe: vi.fn(),
   removeChannel: vi.fn(),
@@ -14,7 +14,7 @@ const supabaseMocks = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/browser", () => ({
   createBrowserSupabaseClient: () => ({
     auth: {
-      getUser: supabaseMocks.getUser,
+      getSession: supabaseMocks.getSession,
       onAuthStateChange: supabaseMocks.onAuthStateChange,
     },
     rpc: supabaseMocks.rpc,
@@ -28,7 +28,7 @@ function heartbeatCalls() {
 }
 
 async function flushAuthenticatedUser() {
-  await waitFor(() => expect(supabaseMocks.getUser).toHaveBeenCalledOnce());
+  await waitFor(() => expect(supabaseMocks.getSession).toHaveBeenCalledOnce());
   await act(async () => {
     await Promise.resolve();
   });
@@ -37,6 +37,7 @@ async function flushAuthenticatedUser() {
 describe("online presence heartbeat scheduling", () => {
   let visibilityState: DocumentVisibilityState;
   let online: boolean;
+  let presenceEventHandler: ((payload: { new: unknown }) => void) | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -46,13 +47,16 @@ describe("online presence heartbeat scheduling", () => {
     vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibilityState);
     vi.spyOn(navigator, "onLine", "get").mockImplementation(() => online);
 
-    supabaseMocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    supabaseMocks.getSession.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
     supabaseMocks.onAuthStateChange.mockReturnValue({
       data: { subscription: { unsubscribe: supabaseMocks.unsubscribe } },
     });
     supabaseMocks.channel.mockImplementation(() => {
       const channel = {
-        on: vi.fn(() => channel),
+        on: vi.fn((_kind, _filter, handler) => {
+          presenceEventHandler = handler;
+          return channel;
+        }),
         subscribe: vi.fn(() => channel),
       };
       return channel;
@@ -141,5 +145,52 @@ describe("online presence heartbeat scheduling", () => {
       window.dispatchEvent(new Event("online"));
     });
     expect(heartbeatCalls()).toHaveLength(3);
+  });
+
+  it("refreshes the roster initially and then only every five minutes without a realtime event", async () => {
+    supabaseMocks.rpc.mockImplementation((name: string) => Promise.resolve(
+      name === "heartbeat_player_presence"
+        ? { error: null }
+        : { data: [], error: null },
+    ));
+
+    render(<OnlinePresenceProvider><div>משחק</div></OnlinePresenceProvider>);
+    await flushAuthenticatedUser();
+    await waitFor(() => expect(heartbeatCalls()).toHaveLength(1));
+    expect(supabaseMocks.rpc.mock.calls.filter(([name]) => name === "get_online_players")).toHaveLength(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4 * 60_000);
+    });
+    expect(heartbeatCalls()).toHaveLength(5);
+    expect(supabaseMocks.rpc.mock.calls.filter(([name]) => name === "get_online_players")).toHaveLength(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(heartbeatCalls()).toHaveLength(6);
+    expect(supabaseMocks.rpc.mock.calls.filter(([name]) => name === "get_online_players")).toHaveLength(2);
+  });
+
+  it("coalesces a burst of realtime presence events into one roster refresh", async () => {
+    supabaseMocks.rpc.mockImplementation((name: string) => Promise.resolve(
+      name === "heartbeat_player_presence"
+        ? { error: null }
+        : { data: [], error: null },
+    ));
+
+    render(<OnlinePresenceProvider><div>משחק</div></OnlinePresenceProvider>);
+    await flushAuthenticatedUser();
+    await waitFor(() => expect(heartbeatCalls()).toHaveLength(1));
+    expect(presenceEventHandler).toBeTypeOf("function");
+
+    await act(async () => {
+      presenceEventHandler?.({ new: { id: 1, user_id: "user-2", event_type: "joined", display_name: "שחקן שני" } });
+      presenceEventHandler?.({ new: { id: 2, user_id: "user-3", event_type: "joined", display_name: "שחקן שלישי" } });
+      presenceEventHandler?.({ new: { id: 3, user_id: "user-4", event_type: "left", display_name: "שחקן רביעי" } });
+      await vi.advanceTimersByTimeAsync(150);
+    });
+
+    expect(supabaseMocks.rpc.mock.calls.filter(([name]) => name === "get_online_players")).toHaveLength(2);
   });
 });

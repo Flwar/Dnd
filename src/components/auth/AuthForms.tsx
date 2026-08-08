@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -76,7 +76,6 @@ export function LoginForm() {
       setResult(response);
       if (response.ok) {
         router.replace("/menu");
-        router.refresh();
       }
     });
   });
@@ -113,7 +112,6 @@ export function RegisterForm() {
       setResult(response);
       if (response.ok && !response.requiresEmailConfirmation) {
         router.replace("/characters/new");
-        router.refresh();
       }
     });
   });
@@ -168,11 +166,15 @@ export function ResetPasswordForm() {
   const [result, setResult] = useState<AuthActionResult | null>(null);
   const [pending, startTransition] = useTransition();
   const form = useForm<ResetPasswordInput>({ resolver: zodResolver(resetPasswordSchema), defaultValues: { password: "", confirmPassword: "" } });
+  useEffect(() => {
+    if (!result?.ok) return;
+    const timer = window.setTimeout(() => router.replace("/menu"), 900);
+    return () => window.clearTimeout(timer);
+  }, [result, router]);
   return (
     <form className="space-y-5" onSubmit={form.handleSubmit((values) => startTransition(async () => {
       const response = await resetPasswordAction(values);
       setResult(response);
-      if (response.ok) window.setTimeout(() => router.replace("/menu"), 900);
     }))} noValidate>
       <StatusMessage result={result} />
       {result?.ok ? <CheckCircle2 className="mx-auto size-12 text-[#77b686]" aria-hidden="true" /> : null}

@@ -40,6 +40,21 @@ export const quests: Quest[] = [
     ],
     rewards: { experience: 100, gold: 18, itemIds: ["minor-healing-potion"], reputation: 2 },
   },
+  {
+    id: "the-bell-without-a-hand",
+    name: "הפעמון שאין לו יד",
+    description: "לאחר שובך מן המכרה, הפעמון הסדוק מצלצל ללא ענבל ושבע רונות מופיעות על דלתות ערפלון. יש להכין את הכפר ללילה, לפענח את האות ולבחור כיצד לשאת את הרסיס אל הדרך הצפונית.",
+    type: "optional",
+    objectives: [
+      { id: "hear-midnight-bell", text: "הקשב לאזהרת פעמון חצות.", optional: false, status: "active" },
+      { id: "choose-village-defense", text: "בחר כיצד ערפלון תתגונן עד הבוקר.", optional: false, status: "active" },
+      { id: "decode-the-bell", text: "פענח את הרונות שעל הפעמון הסדוק.", optional: false, status: "active" },
+      { id: "read-the-omen", text: "התעמת עם המסר שהרסיס השאיר במי הבאר.", optional: false, status: "active" },
+      { id: "choose-the-northern-path", text: "קבע כיצד תצא אל הדרך הצפונית מבלי להפקיר את הכפר.", optional: false, status: "active" },
+      { id: "find-the-traitor-keeper", text: "גלה מי משומרי הכתר מחק את השבועה השביעית.", optional: true, hiddenUntilFlag: "keepers_betrayal_discovered", status: "hidden" },
+    ],
+    rewards: { experience: 140, gold: 30, itemIds: ["minor-healing-potion"], reputation: 3 },
+  },
 ];
 
 export const questsById = Object.fromEntries(quests.map((quest) => [quest.id, quest])) as Record<string, Quest>;

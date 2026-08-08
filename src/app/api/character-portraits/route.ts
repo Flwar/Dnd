@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_CHARACTER_PORTRAIT_BYTES + 65_536) {
-    return errorResponse("התמונה גדולה מדי. הגודל המרבי הוא 2 מגה־בייט.", 413);
+    return errorResponse("התמונה המעובדת גדולה מדי. יש לבחור אותה מחדש כדי שהמכשיר יכווץ אותה לפני ההעלאה.", 413);
   }
 
   const { supabase, user } = await authenticatedClient();
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   if (!(file instanceof File)) return errorResponse("יש לבחור קובץ תמונה.", 400);
   if (file.size < 1) return errorResponse("קובץ התמונה ריק.", 400);
   if (file.size > MAX_CHARACTER_PORTRAIT_BYTES) {
-    return errorResponse("התמונה גדולה מדי. הגודל המרבי הוא 2 מגה־בייט.", 413);
+    return errorResponse("התמונה המעובדת גדולה מדי. יש לבחור אותה מחדש כדי שהמכשיר יכווץ אותה לפני ההעלאה.", 413);
   }
 
   const declaredMime = normalizeDeclaredPortraitMime(file.type);
@@ -138,6 +138,18 @@ export async function DELETE(request: NextRequest) {
   if (referenceError) return errorResponse("לא הצלחנו לוודא אם הדיוקן נמצא בשימוש.", 503);
   if (referencedCharacter) {
     return errorResponse("אי אפשר למחוק דיוקן שנמצא בשימוש של דמות.", 409);
+  }
+
+  const { data: referencedProfile, error: profileReferenceError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .eq("avatar_key", parsed.portraitKey)
+    .maybeSingle();
+
+  if (profileReferenceError) return errorResponse("לא הצלחנו לוודא אם התמונה נמצאת בשימוש בפרופיל.", 503);
+  if (referencedProfile) {
+    return errorResponse("אי אפשר למחוק תמונה שנמצאת בשימוש בפרופיל.", 409);
   }
 
   const { error } = await supabase.storage

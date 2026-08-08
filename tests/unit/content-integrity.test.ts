@@ -44,14 +44,14 @@ describe("שלמות תוכן הפרק", () => {
     }
   });
 
-  it("כולל שישה־עשר מיקומים עם אמנות, אווירה ויציאות חוקיות", () => {
+  it("כולל שמונה־עשר מיקומים עם אמנות, אווירה ויציאות חוקיות", () => {
     const requiredNames = [
       "שער הכפר", "כיכר ערפלון", "פונדק העורב הרטוב", "הנפחייה", "בקתת המרפא", "בית ראש הכפר",
       "הדרך למכרה", "מגדל התצפית החרב", "מעגל אבני הסף", "כניסת המכרה", "המנהרה הראשית", "מחסן הכלים הנטוש", "המעבר המוצף", "אולם העמודים",
-      "החדר הנסתר", "היכל השומר",
+      "החדר הנסתר", "היכל השומר", "גג מגדל הפעמון", "קמרון הבאר העתיקה",
     ];
     expect(locations.map((location) => location.name)).toEqual(requiredNames);
-    expect(new Set(locations.map((location) => location.backgroundAssetKey)).size).toBe(16);
+    expect(new Set(locations.map((location) => location.backgroundAssetKey)).size).toBe(18);
     for (const location of locations) {
       expect(location.backgroundAssetKey).toBeTruthy();
       expect(location.ambienceSoundKey).toBeTruthy();
@@ -111,11 +111,55 @@ describe("שלמות תוכן הפרק", () => {
     ]));
   });
 
-  it("מכיל שלוש־עשרה סצנות מלאות, חזרה לכפר וחזון סיום", () => {
-    expect(openingChapter.estimatedMinutes).toEqual([70, 120]);
-    expect(openingScenes).toHaveLength(13);
-    expect(openingScenes.map((scene) => scene.number)).toEqual(Array.from({ length: 13 }, (_, index) => index + 1));
+  it("מכיל חמש־עשרה סצנות מלאות, חזרה לכפר ואפילוג פעיל", () => {
+    expect(openingChapter.estimatedMinutes).toEqual([85, 140]);
+    expect(openingScenes).toHaveLength(15);
+    expect(openingScenes.map((scene) => scene.number)).toEqual(Array.from({ length: 15 }, (_, index) => index + 1));
     expect(dialoguesById["grey-woman-vision"].text).toContain("מצאתי אותך");
+    expect(openingScenes.at(-2)?.locationId).toBe("bell-tower-roof");
+    expect(openingScenes.at(-1)?.locationId).toBe("moonwell-undercrypt");
+  });
+
+  it("אינו מסיים את הפרק מיד לאחר הדיווח אלא מחייב הגנה, חקירה והכרעת דרך", () => {
+    for (const choice of dialoguesById["elric-aftermath-rescued"].choices) {
+      expect(choice.nextNodeId).toBe("elric-first-night-bell");
+      expect(choice.exitAction).toBeUndefined();
+    }
+    expect(dialoguesById["elric-aftermath-abandoned"].choices.find((choice) => choice.id === "aftermath-send-rescue")?.nextNodeId).toBe("elric-danor-rescue-result");
+    expect(dialoguesById["elric-aftermath-abandoned"].choices.find((choice) => choice.id === "aftermath-confess-choice")?.nextNodeId).toBe("elric-first-night-bell");
+    expect(dialoguesById["elric-danor-rescue-result"].onEnterEffects).toContainEqual({ kind: "set-flag", key: "danor_rescued", value: true });
+
+    const defense = dialoguesById["elric-first-night-bell"];
+    for (const choice of defense.choices) {
+      expect(choice.effects).toContainEqual({ kind: "set-flag", key: "first_night_defense_chosen", value: true });
+      expect(choice.effects).toContainEqual(expect.objectContaining({
+        kind: "quest-objective",
+        questId: "the-bell-without-a-hand",
+        objectiveId: "choose-village-defense",
+        status: "completed",
+      }));
+      expect(choice.exitAction).toBe("close");
+    }
+
+    const towerExit = locationsById["arfelon-square"].exits.find((exit) => exit.destinationId === "bell-tower-roof");
+    const cryptExit = locationsById["bell-tower-roof"].exits.find((exit) => exit.destinationId === "moonwell-undercrypt");
+    expect(towerExit?.conditions).toContainEqual({ kind: "flag", key: "first_night_defense_chosen", value: true });
+    expect(cryptExit?.conditions).toContainEqual({ kind: "flag", key: "bell_signal_traced", value: true });
+
+    const omen = dialoguesById["grey-woman-at-the-well"];
+    expect(omen.choices).toHaveLength(4);
+    for (const choice of omen.choices) expect(choice.nextNodeId).toBe("elric-aftermath-final-oath");
+
+    const finalOath = dialoguesById["elric-aftermath-final-oath"];
+    for (const choice of finalOath.choices) {
+      expect(choice.effects).toContainEqual(expect.objectContaining({
+        kind: "quest-objective",
+        questId: "the-bell-without-a-hand",
+        objectiveId: "choose-the-northern-path",
+        status: "completed",
+      }));
+      expect(choice.exitAction).toBe("close");
+    }
   });
 
   it("מכסה במניפסט את האמנות, האייקונים והדיוקנאות שבהם התוכן משתמש", () => {

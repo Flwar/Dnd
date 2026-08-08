@@ -1,5 +1,6 @@
 export const PRESENCE_HEARTBEAT_INTERVAL_MS = 60_000;
 export const PRESENCE_HEARTBEAT_MAX_BACKOFF_MS = 5 * 60_000;
+export const PRESENCE_ROSTER_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 export function getPresenceHeartbeatDelay(consecutiveFailures: number): number {
   const normalizedFailures = Number.isFinite(consecutiveFailures)

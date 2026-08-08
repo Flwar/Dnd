@@ -236,4 +236,25 @@ describe("timed external fetch", () => {
     expect(fetchImplementation).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("can fail fast after one timed-out safe request", async () => {
+    vi.useFakeTimers();
+    const fetchImplementation = abortAwarePendingFetch();
+    const timedFetch = createTimedFetch(250, fetchImplementation, {
+      retrySafeRequests: true,
+      retryTimeouts: false,
+    });
+
+    const request = timedFetch("https://example.test/slow");
+    const rejection = expect(request).rejects.toMatchObject({
+      name: "ExternalRequestTimeoutError",
+      timeoutMs: 250,
+    });
+
+    await vi.advanceTimersByTimeAsync(250);
+    await rejection;
+
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

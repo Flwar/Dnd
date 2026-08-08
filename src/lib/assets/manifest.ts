@@ -23,6 +23,8 @@ const backgroundNames = [
   "hidden-chamber",
   "guardian-sanctum",
   "shard-sanctum",
+  "bell-tower-roof",
+  "moonwell-undercrypt",
 ] as const;
 
 const artDirectedBackgroundNames = new Set<string>([
@@ -44,6 +46,8 @@ const artDirectedBackgroundNames = new Set<string>([
   "hidden-chamber",
   "guardian-sanctum",
   "shard-sanctum",
+  "bell-tower-roof",
+  "moonwell-undercrypt",
 ]);
 
 export const racePortraitKeys = [

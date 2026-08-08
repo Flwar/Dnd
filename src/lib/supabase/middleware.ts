@@ -4,7 +4,10 @@ import { getPublicEnvironment } from "@/lib/env";
 import { createTimedFetch } from "@/lib/network/timed-fetch";
 import type { Database } from "@/types/database";
 
-const supabaseMiddlewareFetch = createTimedFetch(7_000);
+// This is only the request gate. Protected pages perform authoritative user
+// verification themselves, so the proxy should fail open promptly when Auth
+// is temporarily slow instead of holding every route transition hostage.
+const supabaseMiddlewareFetch = createTimedFetch(2_000);
 
 export async function refreshSupabaseSession(request: NextRequest) {
   const environment = getPublicEnvironment();

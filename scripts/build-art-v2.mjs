@@ -23,6 +23,8 @@ const focusByAsset = {
   "hidden-chamber": "centre",
   "guardian-sanctum": "centre",
   "shard-sanctum": "centre",
+  "bell-tower-roof": "centre",
+  "moonwell-undercrypt": "centre",
 };
 
 function grainBuffer(width, height, seed) {

@@ -14,6 +14,7 @@ import { UserMinus, UserPlus, X } from "lucide-react";
 import {
   canSendPresenceHeartbeat,
   getPresenceHeartbeatDelay,
+  PRESENCE_ROSTER_REFRESH_INTERVAL_MS,
 } from "@/lib/presence/heartbeat-schedule";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import type { PlayerPresenceEventRow } from "@/types/database";
@@ -83,6 +84,7 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
   const toastTimers = useRef(new Set<number>());
   const connectionIds = useRef(new Map<string, string>());
   const activeUserId = useRef<string | null>(null);
+  const refreshInFlight = useRef<{ userId: string; promise: Promise<void> } | null>(null);
 
   const dismissToast = useCallback((id: string) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -115,15 +117,27 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
       return;
     }
     if (!canSendPresenceHeartbeat(document.visibilityState, navigator.onLine)) return;
+    if (refreshInFlight.current?.userId === currentUserId) {
+      return refreshInFlight.current.promise;
+    }
 
+    const operation = (async () => {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const { data, error } = await supabase.rpc("get_online_players");
+        if (error) return;
+        if (activeUserId.current !== currentUserId) return;
+        setPlayers((data ?? []).map(mapOnlinePlayer));
+      } catch {
+        // The next heartbeat or realtime event retries the sanitized roster read.
+      }
+    })();
+    const inFlight = { userId: currentUserId, promise: operation };
+    refreshInFlight.current = inFlight;
     try {
-      const supabase = createBrowserSupabaseClient();
-      const { data, error } = await supabase.rpc("get_online_players");
-      if (error) return;
-      if (activeUserId.current !== currentUserId) return;
-      setPlayers((data ?? []).map(mapOnlinePlayer));
-    } catch {
-      // The next heartbeat or realtime event retries the sanitized roster read.
+      await operation;
+    } finally {
+      if (refreshInFlight.current === inFlight) refreshInFlight.current = null;
     }
   }, [currentUserId]);
 
@@ -132,16 +146,24 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
     let active = true;
     const synchronizeUser = (userId: string | null) => {
       if (!active) return;
+      if (activeUserId.current !== userId) {
+        // Do not let an in-flight roster read from the previous account block
+        // or populate the first refresh for a newly authenticated account.
+        refreshInFlight.current = null;
+        setPlayers([]);
+      }
       activeUserId.current = userId;
       setCurrentUserId(userId);
       if (!userId) {
-        setPlayers([]);
         setStatus("disconnected");
       }
     };
 
-    void supabase.auth.getUser()
-      .then(({ data }) => synchronizeUser(data.user?.id ?? null))
+    // Presence is display-only client state; the heartbeat RPC still enforces
+    // auth.uid() authoritatively. Reading the cached session avoids a duplicate
+    // Auth /user database request on every full page load.
+    void supabase.auth.getSession()
+      .then(({ data }) => synchronizeUser(data.session?.user.id ?? null))
       .catch(() => synchronizeUser(null));
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -168,6 +190,8 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
     let heartbeatInFlight = false;
     let consecutiveFailures = 0;
     let heartbeatTimer: number | undefined;
+    let rosterRefreshTimer: number | undefined;
+    let lastRosterRefreshAt = 0;
 
     const canUseNetwork = () => canSendPresenceHeartbeat(
       document.visibilityState,
@@ -189,6 +213,14 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
       }, delayMs);
     };
 
+    const scheduleRosterRefresh = () => {
+      if (!active || !canUseNetwork() || rosterRefreshTimer !== undefined) return;
+      rosterRefreshTimer = window.setTimeout(() => {
+        rosterRefreshTimer = undefined;
+        void refresh();
+      }, 150);
+    };
+
     const heartbeat = async () => {
       clearHeartbeatTimer();
       if (!active || heartbeatInFlight || !canUseNetwork()) return;
@@ -207,9 +239,17 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
         }
         heartbeatSucceeded = true;
         consecutiveFailures = 0;
+        const firstSuccessfulHeartbeat = !hasConnected;
         hasConnected = true;
         setStatus("connected");
-        if (canUseNetwork()) await refresh();
+        const now = Date.now();
+        if (
+          canUseNetwork() &&
+          (firstSuccessfulHeartbeat || now - lastRosterRefreshAt >= PRESENCE_ROSTER_REFRESH_INTERVAL_MS)
+        ) {
+          await refresh();
+          lastRosterRefreshAt = Date.now();
+        }
       } catch {
         if (!active) return;
         consecutiveFailures += 1;
@@ -239,7 +279,7 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
         (payload) => {
           const event = payload.new as PlayerPresenceEventRow;
           if (event.user_id !== currentUserId) addToast(event);
-          void refresh();
+          scheduleRosterRefresh();
         },
       )
       .subscribe((channelStatus) => {
@@ -291,6 +331,7 @@ export function OnlinePresenceProvider({ children }: { children: React.ReactNode
     return () => {
       active = false;
       clearHeartbeatTimer();
+      if (rosterRefreshTimer !== undefined) window.clearTimeout(rosterRefreshTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);

@@ -3,9 +3,17 @@
 import { useEffect, useState } from "react";
 import { Crown, RefreshCw } from "lucide-react";
 
-const SLOW_LOADING_DELAY_MS = 6_000;
+const SLOW_LOADING_DELAY_MS = 4_000;
 
-export function RouteLoadingFallback() {
+export function RouteLoadingFallback({
+  title = "הערפל מתפזר…",
+  detail = "מכינים את הדרך אל ארצות ואלדר",
+  recoveryHref,
+}: {
+  title?: string;
+  detail?: string;
+  recoveryHref?: string;
+}) {
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
@@ -24,22 +32,32 @@ export function RouteLoadingFallback() {
           <Crown className="size-12 text-[#c6a15b]" aria-hidden="true" />
         </div>
         <p className="display-font text-2xl text-[#e8dfce]">
-          {slow ? "הטעינה מתארכת מהרגיל" : "הערפל מתפזר…"}
+          {slow ? "הטעינה מתארכת מהרגיל" : title}
         </p>
         <p className="mt-2 text-sm leading-6 text-[#a89f91]">
           {slow
             ? "החיבור לענן עדיין לא הסתיים. אפשר לנסות מחדש בלי לפגוע בהתקדמות השמורה."
-            : "מכינים את הדרך אל ארצות ואלדר"}
+            : detail}
         </p>
         {slow ? (
-          <button
-            type="button"
-            className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 border border-[#c6a15b]/65 bg-[#6f5128] px-5 font-bold text-[#fff3d2] transition-colors hover:border-[#f0cf82] hover:bg-[#806033] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f0cf82]"
-            onClick={() => window.location.reload()}
-          >
-            <RefreshCw className="size-4" aria-hidden="true" />
-            טעינה מחדש
-          </button>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-[#c6a15b]/65 bg-[#6f5128] px-5 font-bold text-[#fff3d2] transition-colors hover:border-[#f0cf82] hover:bg-[#806033] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f0cf82]"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
+              טעינה מחדש
+            </button>
+            {recoveryHref ? (
+              <a
+                href={recoveryHref}
+                className="inline-flex min-h-12 items-center justify-center border border-white/20 bg-black/30 px-5 font-bold text-[#d8cebd] transition-colors hover:border-[#c6a15b]/55 hover:text-[#f0cf82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f0cf82]"
+              >
+                חזרה לתפריט
+              </a>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </main>

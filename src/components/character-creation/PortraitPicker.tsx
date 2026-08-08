@@ -4,51 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ImagePlus, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { GameButton } from "@/components/ui/GameButton";
+import {
+  deletePortrait,
+  PortraitPreparationError,
+  uploadPortrait,
+  validatePortraitSource,
+} from "@/lib/portrait-upload-client";
 import { isCustomPortraitKey } from "@/lib/portraits";
 import type { CharacterRace } from "@/types/game";
-
-const MAX_PORTRAIT_BYTES = 2 * 1024 * 1024;
-const ALLOWED_PORTRAIT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-
-type PortraitUploadResponse = {
-  portraitKey: string;
-  portraitUrl: string;
-};
 
 type PortraitPickerProps = {
   race: CharacterRace;
   selected: string;
   selectedPortraitUrl?: string | null;
   onSelect: (portraitKey: string, portraitUrl?: string | null) => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
-function validatePortraitFile(file: File): string | null {
-  if (!ALLOWED_PORTRAIT_TYPES.has(file.type)) {
-    return "אפשר להעלות תמונת JPG, PNG או WebP בלבד.";
-  }
-  if (!file.size) return "קובץ התמונה ריק. יש לבחור תמונה אחרת.";
-  if (file.size > MAX_PORTRAIT_BYTES) {
-    return "התמונה גדולה מ־2 מגה־בייט. יש לבחור קובץ קטן יותר.";
-  }
-  return null;
-}
-
-async function responseMessage(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => null) as { message?: unknown; error?: unknown } | null;
-  if (typeof body?.message === "string") return body.message;
-  if (typeof body?.error === "string") return body.error;
-  return fallback;
-}
-
-async function deletePortrait(portraitKey: string): Promise<Response> {
-  return fetch("/api/character-portraits", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ portraitKey }),
-  });
-}
-
-export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }: PortraitPickerProps) {
+export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect, onBusyChange }: PortraitPickerProps) {
   const [mode, setMode] = useState<"presets" | "upload">(() => isCustomPortraitKey(selected) ? "upload" : "presets");
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -56,10 +29,19 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const uploadSequenceRef = useRef(0);
+  const busy = uploading || deleting;
 
   useEffect(() => () => {
+    mountedRef.current = false;
+    uploadSequenceRef.current += 1;
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
   }, []);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   const replacePreviewUrl = (next: string | null) => {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -68,43 +50,39 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
   };
 
   const uploadFile = async (file: File) => {
-    const validationError = validatePortraitFile(file);
+    const validationError = validatePortraitSource(file);
     if (validationError) {
       setError(validationError);
       return;
     }
 
     const oldPortraitKey = isCustomPortraitKey(selected) ? selected : null;
+    const uploadSequence = ++uploadSequenceRef.current;
     replacePreviewUrl(URL.createObjectURL(file));
     setError(null);
     setUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.set("file", file);
-      const response = await fetch("/api/character-portraits", { method: "POST", body: formData });
-      if (!response.ok) {
-        setError(await responseMessage(response, "לא הצלחנו להעלות את התמונה. אפשר לנסות שוב."));
+      const result = await uploadPortrait(file);
+      if (!mountedRef.current || uploadSequence !== uploadSequenceRef.current) {
+        void deletePortrait(result.portraitKey).catch(() => undefined);
         return;
       }
-
-      const body = await response.json() as Partial<PortraitUploadResponse>;
-      if (!body.portraitKey || !isCustomPortraitKey(body.portraitKey) || typeof body.portraitUrl !== "string") {
-        setError("שרת התמונות החזיר תשובה לא תקינה. אפשר לנסות שוב.");
-        return;
-      }
-
-      onSelect(body.portraitKey, body.portraitUrl);
-      if (oldPortraitKey && oldPortraitKey !== body.portraitKey) {
+      onSelect(result.portraitKey, result.portraitUrl);
+      if (oldPortraitKey && oldPortraitKey !== result.portraitKey) {
         void deletePortrait(oldPortraitKey).catch(() => undefined);
       }
       replacePreviewUrl(null);
-    } catch {
-      setError("החיבור נקטע בזמן העלאת התמונה. בדקו את החיבור ונסו שוב.");
+    } catch (uploadError) {
+      setError(uploadError instanceof PortraitPreparationError
+        ? uploadError.message
+        : "החיבור נקטע בזמן העלאת התמונה. בדקו את החיבור ונסו שוב.");
     } finally {
-      setUploading(false);
-      replacePreviewUrl(null);
-      if (inputRef.current) inputRef.current.value = "";
+      if (mountedRef.current && uploadSequence === uploadSequenceRef.current) {
+        setUploading(false);
+        replacePreviewUrl(null);
+        if (inputRef.current) inputRef.current.value = "";
+      }
     }
   };
 
@@ -113,11 +91,7 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
     setDeleting(true);
     setError(null);
     try {
-      const response = await deletePortrait(selected);
-      if (!response.ok) {
-        setError(await responseMessage(response, "לא הצלחנו להסיר את התמונה. אפשר לנסות שוב."));
-        return;
-      }
+      await deletePortrait(selected);
       replacePreviewUrl(null);
       onSelect(race.portraitKeys[0], null);
     } catch {
@@ -137,7 +111,6 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
 
   const selectedCustom = isCustomPortraitKey(selected);
   const displayPreviewUrl = previewUrl ?? selectedPortraitUrl;
-  const busy = uploading || deleting;
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -157,8 +130,10 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
           type="button"
           role="tab"
           aria-selected={mode === "presets"}
+          tabIndex={mode === "presets" ? 0 : -1}
           aria-controls="portrait-presets-panel"
           data-testid="portrait-mode-presets"
+          disabled={busy}
           className={`min-h-12 border px-3 font-semibold transition-colors ${mode === "presets" ? "border-[#f0cf82]/70 bg-[#c6a15b]/18 text-[#fff0c7]" : "border-transparent text-[#aaa194] hover:text-[#f0cf82]"}`}
           onClick={() => setMode("presets")}
           onKeyDown={handleTabKeyDown}
@@ -170,8 +145,10 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
           type="button"
           role="tab"
           aria-selected={mode === "upload"}
+          tabIndex={mode === "upload" ? 0 : -1}
           aria-controls="portrait-upload-panel"
           data-testid="portrait-mode-upload"
+          disabled={busy}
           className={`min-h-12 border px-3 font-semibold transition-colors ${mode === "upload" ? "border-[#62c6df]/70 bg-[#62c6df]/12 text-[#d9f7ff]" : "border-transparent text-[#aaa194] hover:text-[#b7e9f3]"}`}
           onClick={() => setMode("upload")}
           onKeyDown={handleTabKeyDown}
@@ -188,6 +165,7 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
               type="button"
               onClick={() => selectPreset(key)}
               data-testid={`portrait-option-${key}`}
+              disabled={busy}
               className={`group relative aspect-[3/4] overflow-hidden border-2 bg-[#101318] ${selected === key ? "border-[#f0cf82] shadow-[0_0_26px_rgba(98,198,223,.24)]" : "border-white/10 hover:border-[#c6a15b]/60"}`}
               aria-label={`דיוקן ${race.name}, אפשרות ${index + 1}`}
               aria-pressed={selected === key}
@@ -238,7 +216,7 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
               <span>
                 {selectedCustom ? <RefreshCw className="mx-auto mb-3 size-9 text-[#62c6df]" aria-hidden="true" /> : <Upload className="mx-auto mb-3 size-9 text-[#62c6df]" aria-hidden="true" />}
                 <b className="block text-[#e9dfcb]" data-testid={selectedCustom ? "portrait-upload-replace" : undefined}>{selectedCustom ? "בחירת תמונה אחרת" : "בחירת תמונה מהמכשיר"}</b>
-                <span className="mt-2 block text-sm leading-6 text-[#9e968a]">JPG, PNG או WebP · עד 2 מגה־בייט</span>
+                <span className="mt-2 block text-sm leading-6 text-[#9e968a]">JPG, PNG או WebP · קובץ מקור עד 12 מגה־בייט</span>
               </span>
               <input
                 ref={inputRef}
@@ -255,7 +233,7 @@ export function PortraitPicker({ race, selected, selectedPortraitUrl, onSelect }
               />
             </label>
 
-            <p className="mt-3 text-sm leading-6 text-[#a89f91]">התמונה תישמר בענן בכתובת ציבורית ותוצג לחברי החבורה בזמן משחק מקוון. אין להעלות תמונה פרטית או רגישה.</p>
+            <p className="mt-3 text-sm leading-6 text-[#a89f91]">תמונות גדולות מכווצות במכשיר באיכות גבוהה לפני ההעלאה. התמונה תישמר בענן בכתובת ציבורית ותוצג לחברי החבורה בזמן משחק מקוון; אין להעלות תמונה פרטית או רגישה.</p>
             {selectedCustom ? (
               <GameButton className="mt-4 self-start" variant="danger" size="sm" loading={deleting} disabled={uploading} onClick={removeCustomPortrait} data-testid="portrait-upload-remove">
                 <Trash2 className="size-4" aria-hidden="true" />הסרת התמונה
