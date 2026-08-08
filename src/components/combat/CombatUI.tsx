@@ -7,6 +7,7 @@ import { ActionDock } from "./ActionDock";
 import { CombatLog } from "./CombatLog";
 import { CombatOutcome } from "./CombatOutcome";
 import { CombatantCard } from "./CombatantCard";
+import { CombatEventFx, type VisualCombatEvent } from "./CombatEventFx";
 import { TurnOrder } from "./TurnOrder";
 import { acquireBodyScrollLock } from "@/lib/body-scroll-lock";
 import { getAssetPath } from "@/lib/assets/manifest";
@@ -19,6 +20,22 @@ const encounterBackdrops: Readonly<Record<string, string>> = {
   "flooded-passage-pack": "background-flooded-passage",
   "stone-guardian-boss": "background-guardian-sanctum",
 };
+
+function latestVisualEvent(events: CombatUIProps["state"]["log"]): VisualCombatEvent | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (
+      event.kind === "damage" ||
+      event.kind === "healing" ||
+      event.kind === "status-applied" ||
+      event.kind === "miss" ||
+      event.kind === "defeated"
+    ) {
+      return event;
+    }
+  }
+  return null;
+}
 
 export function CombatUI({
   state,
@@ -54,6 +71,7 @@ export function CombatUI({
   const guardian = enemies.find((combatant) => combatant.enemyId === "ancient-stone-guardian");
   const guardianTelegraph = guardian?.statuses.some((status) => status.statusId === "telegraphed");
   const backdropKey = encounterBackdrops[state.encounterId] ?? "background-main-tunnel";
+  const visualEvent = latestVisualEvent(state.log);
 
   useEffect(() => {
     const body = document.body;
@@ -117,6 +135,7 @@ export function CombatUI({
       >
         <ArtDirectedPicture desktopSrc={getAssetPath(backdropKey)} mobileSrc={getAssetPath(`${backdropKey}-mobile`)} alt="" priority pictureClassName="pointer-events-none absolute inset-0 -z-20" />
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(2,4,5,.42),rgba(3,5,6,.72)_45%,rgba(2,3,4,.94)),radial-gradient(ellipse_at_50%_42%,transparent_15%,rgba(0,0,0,.62)_95%)]" />
+        <CombatEventFx event={visualEvent} combatants={state.combatants} reducedMotion={shouldReduceMotion} />
 
         <header className="safe-inline-area shrink-0 border-b border-[#c6a15b]/25 bg-[linear-gradient(90deg,rgba(17,20,23,.96),rgba(35,26,17,.88),rgba(17,20,23,.96))] px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] shadow-[0_12px_32px_rgba(0,0,0,.35)] sm:px-6 sm:py-4">
           <div className="mx-auto flex max-w-[96rem] items-center justify-between gap-3">

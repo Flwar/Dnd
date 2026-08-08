@@ -44,14 +44,14 @@ export async function createDefaultCharacter(page: Page, name: string): Promise<
   await page.goto("/characters/new");
   await expect(page.getByRole("heading", { name: "יצירת דמות" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "מי יעמוד מול הערפל?" })).toBeVisible();
-  await page.getByLabel("שם הדמות").fill(name);
+  await page.getByLabel("שם הדמות").last().fill(name);
 
   for (const heading of creatorSteps) {
-    await page.getByRole("button", { name: "הבא", exact: true }).click();
+    await page.getByRole("button", { name: "הבא", exact: true }).last().click();
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
   }
 
-  await page.getByRole("button", { name: "צא לדרך", exact: true }).click();
+  await page.getByRole("button", { name: "צא לדרך", exact: true }).last().click();
   await expect(page).toHaveURL(/\/game\/[0-9a-f-]+\?opening=1$/, { timeout: 30_000 });
 
   const match = new URL(page.url()).pathname.match(/\/game\/([^/]+)$/);

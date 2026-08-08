@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PartyQueryError } from "@/lib/party/errors";
+import { partyMemberIsPresent } from "@/lib/party/presence";
 import type {
   ActivePartyMembership,
   PartyLobbySnapshot,
@@ -57,10 +58,11 @@ export async function findFirstActivePartyMembership(
 function toRosterMember(
   row: Database["public"]["Functions"]["get_party_roster"]["Returns"][number],
 ): PartyRosterMember {
-  const connectionState =
-    row.connection_state === "connected" || row.connection_state === "reconnecting"
-      ? row.connection_state
-      : "disconnected";
+  const connectionState = partyMemberIsPresent(row)
+    ? row.connection_state === "reconnecting"
+      ? "reconnecting"
+      : "connected"
+    : "disconnected";
   return {
     characterId: row.character_id,
     displayName: row.display_name,

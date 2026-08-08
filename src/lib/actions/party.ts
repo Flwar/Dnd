@@ -11,6 +11,7 @@ import {
   joinPartyInputSchema,
   partyCharacterInputSchema,
   partyIdInputSchema,
+  partyMembershipRecoveryInputSchema,
   readyPartyInputSchema,
   transferLeadershipInputSchema,
   type ConnectionInput,
@@ -18,6 +19,7 @@ import {
   type JoinPartyInput,
   type PartyCharacterInput,
   type PartyIdInput,
+  type PartyMembershipRecoveryInput,
   type ReadyPartyInput,
   type TransferLeadershipInput,
 } from "@/lib/party/validation";
@@ -61,6 +63,10 @@ function asJsonObject(value: Json | null): Record<string, Json | undefined> | nu
 function readJsonString(value: Json | null, key: string): string | null {
   const candidate = asJsonObject(value)?.[key];
   return typeof candidate === "string" ? candidate : null;
+}
+
+function readJsonBoolean(value: Json | null, key: string): boolean {
+  return asJsonObject(value)?.[key] === true;
 }
 
 function refreshPartyPages() {
@@ -178,6 +184,38 @@ export async function leavePartyAction(
     if (error) return mapPartyError(error);
     refreshPartyPages();
     return { ok: true, data: { left: true } };
+  } catch (error) {
+    return mapPartyError(error);
+  }
+}
+
+export async function recoverPartyMembershipAction(
+  input: PartyMembershipRecoveryInput,
+): Promise<PartyActionResult<{
+  partyId: string | null;
+  released: boolean;
+  recovered: boolean;
+}>> {
+  const parsed = partyMembershipRecoveryInputSchema.safeParse(input);
+  if (!parsed.success) return invalidInput(parsed.error.issues[0]?.message);
+  const context = await createActionContext();
+  if (!context.ok) return context;
+
+  try {
+    const { data, error } = await context.supabase.rpc("recover_party_membership", {
+      p_character_id: parsed.data.characterId,
+    });
+    if (error) return mapPartyError(error);
+    const partyId = readJsonString(data, "party_id");
+    refreshPartyPages();
+    return {
+      ok: true,
+      data: {
+        partyId,
+        released: readJsonBoolean(data, "released"),
+        recovered: readJsonBoolean(data, "recovered"),
+      },
+    };
   } catch (error) {
     return mapPartyError(error);
   }

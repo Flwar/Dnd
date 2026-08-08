@@ -1,14 +1,13 @@
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   Backpack,
   Crosshair,
   Footprints,
-  HeartPulse,
   Hourglass,
   Shield,
-  Swords,
-  WandSparkles,
 } from "lucide-react";
+import { getAssetPath } from "@/lib/assets/manifest";
 import type { Ability, Combatant } from "@/types/game";
 import type { CombatConsumableOption } from "./types";
 
@@ -72,13 +71,6 @@ function unavailableReason(
   return null;
 }
 
-function abilityIcon(ability: Ability) {
-  if (ability.healingFormula) return HeartPulse;
-  if (ability.formula?.damageType === "arcane" || ability.formula?.damageType === "fire" || ability.formula?.damageType === "cold") return WandSparkles;
-  if (ability.target === "self" || ability.target === "ally") return Shield;
-  return Swords;
-}
-
 export function ActionDock({
   player,
   selectedTarget,
@@ -113,7 +105,6 @@ export function ActionDock({
         {classAbilities.map((ability) => {
           const targets = targetsForAbility(ability, player, selectedTarget, livingEnemies);
           const reason = unavailableReason(ability, player, targets, selectedTarget);
-          const Icon = abilityIcon(ability);
           const disabled = !canAct || busy || Boolean(reason);
           return (
             <motion.button
@@ -124,18 +115,31 @@ export function ActionDock({
               whileHover={!disabled ? { y: -2 } : undefined}
               whileTap={!disabled ? { scale: 0.985 } : undefined}
               transition={{ duration: 0.12 }}
-              className="group relative min-h-[4.5rem] overflow-hidden border border-[#c6a15b]/30 bg-[linear-gradient(150deg,rgba(70,53,28,.5),rgba(19,22,25,.94)_55%)] p-2 text-center outline-none transition-[border-color,filter,opacity] hover:border-[#f0cf82]/70 focus-visible:ring-2 focus-visible:ring-[#70c7da] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none sm:min-h-24 sm:p-3 sm:text-start"
+              className="group relative min-h-[4.75rem] overflow-hidden border border-[#c6a15b]/30 bg-[linear-gradient(150deg,rgba(70,53,28,.54),rgba(19,22,25,.96)_58%)] p-1.5 text-center shadow-[inset_0_1px_rgba(255,236,187,.08),0_8px_20px_rgba(0,0,0,.22)] outline-none transition-[border-color,filter,opacity,box-shadow] hover:border-[#f0cf82]/70 hover:shadow-[inset_0_1px_rgba(255,236,187,.12),0_0_24px_rgba(198,161,91,.14)] focus-visible:ring-2 focus-visible:ring-[#70c7da] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none sm:min-h-28 sm:p-3 sm:text-start"
               aria-describedby={`${ability.id}-details`}
               title={reason ?? ability.description}
             >
-              <span className="flex flex-col items-center gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                <span className="flex min-w-0 flex-col items-center gap-0.5 text-[0.7rem] font-bold leading-tight text-[#f5e8ce] sm:flex-row sm:gap-2 sm:text-base"><Icon className="size-4 shrink-0 text-[#d9bf7c] sm:size-5" aria-hidden="true" /><span className="line-clamp-2">{ability.name}</span></span>
-                <bdi dir="ltr" className="border border-[#62c6df]/25 bg-[#102b35]/70 px-1 py-0 text-[0.65rem] tabular-nums text-[#9de4f2] sm:px-1.5 sm:py-0.5 sm:text-xs">{ability.cost}</bdi>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(240,207,130,.12),transparent_58%)] opacity-70 transition-opacity group-hover:opacity-100" />
+              <span className="relative flex flex-col items-center gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                <span className="flex min-w-0 flex-col items-center gap-0.5 text-[0.7rem] font-bold leading-tight text-[#f5e8ce] sm:flex-row sm:gap-2 sm:text-base">
+                  <span className="relative grid size-9 shrink-0 place-items-center overflow-hidden border border-[#d9bf7c]/30 bg-black/35 shadow-[0_0_18px_rgba(198,161,91,.12)] sm:size-11">
+                    <Image
+                      src={getAssetPath(ability.iconAssetKey)}
+                      alt=""
+                      fill
+                      sizes="(max-width: 639px) 36px, 44px"
+                      className="object-cover transition-transform duration-200 group-hover:scale-105 motion-reduce:transition-none"
+                    />
+                    <span className="absolute inset-0 ring-1 ring-inset ring-white/5" />
+                  </span>
+                  <span className="line-clamp-2">{ability.name}</span>
+                </span>
+                <bdi dir="ltr" className="absolute end-0 top-0 border border-[#62c6df]/30 bg-[#102b35]/90 px-1 py-0 text-[0.62rem] tabular-nums text-[#a8ecf7] shadow-[0_2px_8px_rgba(0,0,0,.4)] sm:static sm:px-1.5 sm:py-0.5 sm:text-xs">{ability.cost}</bdi>
               </span>
-              <span id={`${ability.id}-details`} className="sr-only sm:not-sr-only sm:mt-2 sm:block sm:text-xs sm:leading-5 sm:text-[#aaa194]">
+              <span id={`${ability.id}-details`} className="sr-only sm:not-sr-only sm:relative sm:mt-2 sm:block sm:text-xs sm:leading-5 sm:text-[#aaa194]">
                 {reason ?? ability.description}
               </span>
-              <span className="mt-2 hidden items-center justify-between text-[0.65rem] text-[#827b70] sm:flex">
+              <span className="relative mt-2 hidden items-center justify-between text-[0.65rem] text-[#827b70] sm:flex">
                 <span>{targetLabels[ability.target]}</span>
                 {ability.cooldown > 0 ? <span>המתנה: <bdi dir="ltr">{ability.cooldown}</bdi></span> : <span>ללא המתנה</span>}
               </span>

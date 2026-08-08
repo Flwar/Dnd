@@ -4,6 +4,7 @@ import {
   fetchPartyGameSnapshot,
   subscribeToPartyGame,
 } from "@/lib/party/game-realtime";
+import { findUnappliedHistoricalPartyDialogueChoices } from "@/lib/party/dialogue-recovery";
 import type {
   PartyGameConnectionState,
   PartyGameRealtimeSource,
@@ -37,6 +38,36 @@ describe("מצב Realtime של משחק חבורה", () => {
           session_state: {
             phase: "combat",
             current_location_id: "mine-main-tunnel",
+            resolved_votes: {
+              "scene-village-leader": {
+                "elric-introduction": {
+                  choice_id: "elric-kind",
+                  votes: 2,
+                  submitted_votes: 2,
+                  required_votes: 2,
+                  leader_broke_tie: false,
+                  resolved_at: "2026-07-31T18:01:00.000Z",
+                },
+              },
+              "scene-tutorial-combat": {
+                "choose-route": {
+                  choice_id: "main-tunnel",
+                  votes: 2,
+                  submitted_votes: 2,
+                  required_votes: 2,
+                  leader_broke_tie: false,
+                  resolved_at: "2026-07-31T18:04:30.000Z",
+                },
+                "reconnected-choice": {
+                  choice_id: "persisted-route",
+                  votes: 2,
+                  submitted_votes: 2,
+                  required_votes: 2,
+                  leader_broke_tie: false,
+                  resolved_at: "2026-07-31T18:04:40.000Z",
+                },
+              },
+            },
             combat: {
               active: true,
               encounter_id: "corrupted_cave_rat",
@@ -158,13 +189,38 @@ describe("מצב Realtime של משחק חבורה", () => {
       type: "COMMAND_ACCEPTED",
       sequenceNumber: 4,
     });
-    expect(snapshot?.voteState.decisions[0]).toMatchObject({
+    expect(snapshot?.voteState.decisions.find(
+      (decision) => decision.decisionId === "choose-route",
+    )).toMatchObject({
       decisionId: "choose-route",
       totalVotes: 2,
       requiredVotes: 2,
       choiceCounts: { "main-tunnel": 2 },
       resolvedChoiceId: "main-tunnel",
     });
+    expect(snapshot?.voteState.decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        decisionId: "reconnected-choice",
+        resolvedChoiceId: "persisted-route",
+      }),
+      expect.objectContaining({
+        sceneId: "scene-village-leader",
+        decisionId: "elric-introduction",
+        resolvedChoiceId: "elric-kind",
+      }),
+    ]));
+    expect(snapshot?.voteState.currentSceneVotes).toHaveLength(2);
+    expect(findUnappliedHistoricalPartyDialogueChoices(
+      snapshot?.session.currentSceneId ?? "",
+      snapshot?.voteState.decisions ?? [],
+      {},
+    )).toEqual([
+      expect.objectContaining({
+        sceneId: "scene-village-leader",
+        node: expect.objectContaining({ id: "elric-introduction" }),
+        choice: expect.objectContaining({ id: "elric-kind" }),
+      }),
+    ]);
   });
 
   it("נרשם לארבע טבלאות, מסנכרן חברות, מדווח חיבור מחדש ומנקה את הערוץ", () => {
@@ -192,12 +248,25 @@ describe("מצב Realtime של משחק חבורה", () => {
     const states: PartyGameConnectionState[] = [];
     const sources: PartyGameRealtimeSource[] = [];
 
-    const cleanup = subscribeToPartyGame(supabase, SESSION_ID, {
+    const cleanup = subscribeToPartyGame(
+      supabase,
+      SESSION_ID,
+      "30000000-0000-4000-8000-000000000003",
+      {
       onChange: (source) => sources.push(source),
       onConnectionChange: (state) => states.push(state),
-    });
+      },
+    );
 
     expect(channel.on).toHaveBeenCalledTimes(4);
+    expect(channel.on).toHaveBeenCalledWith(
+      "postgres_changes",
+      expect.objectContaining({
+        table: "party_members",
+        filter: "party_id=eq.30000000-0000-4000-8000-000000000003",
+      }),
+      expect.any(Function),
+    );
     expect(states).toEqual(["connecting"]);
     statusHandler("SUBSCRIBED");
     expect(states.at(-1)).toBe("connected");

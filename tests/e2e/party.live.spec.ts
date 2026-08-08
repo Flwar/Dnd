@@ -27,6 +27,7 @@ async function closeContexts(contexts: BrowserContext[]): Promise<void> {
 
 test.describe("חבורה מקוונת מול Supabase חי", () => {
   test("שני משתמשים יוצרים חדר, מצטרפים, מוכנים, מתחילים ומשתחזרים אחרי רענון", async ({ browser, baseURL }, testInfo) => {
+    test.setTimeout(120_000);
     test.skip(testInfo.project.name !== "מחשב", "הזרימה מרובת ההקשרים רצה פעם אחת בפרויקט המחשב.");
     test.skip(
       !leaderCredentials || !memberCredentials,
@@ -61,8 +62,11 @@ test.describe("חבורה מקוונת מול Supabase חי", () => {
       ]);
 
       const partyName = "שומרי הערפל";
-      await leaderPage.getByLabel("שם החבורה").fill(partyName);
-      await leaderPage.getByLabel("מספר חברים מרבי").selectOption("2");
+      // Next.js can retain the outgoing route tree for a brief transition;
+      // target the visible entry panel rather than coupling the live smoke
+      // test to that transient duplicate DOM.
+      await leaderPage.getByLabel("שם החבורה").first().fill(partyName);
+      await leaderPage.getByLabel("מספר חברים מרבי").first().selectOption("2");
       await leaderPage.getByRole("button", { name: "יצירת החבורה", exact: true }).click();
       await expect(leaderPage.getByRole("heading", { name: partyName })).toBeVisible({ timeout: 30_000 });
 
@@ -71,7 +75,7 @@ test.describe("חבורה מקוונת מול Supabase חי", () => {
       const roomCode = (await roomCodeNode.textContent())?.trim();
       expect(roomCode).toMatch(/^[A-Z0-9]{6}$/);
 
-      await memberPage.getByLabel("קוד חדר").fill(roomCode!);
+      await memberPage.getByLabel("קוד חדר").first().fill(roomCode!);
       await memberPage.getByRole("button", { name: "כניסה לחדר", exact: true }).click();
       await expect(memberPage.getByRole("heading", { name: partyName })).toBeVisible({ timeout: 30_000 });
 
@@ -106,6 +110,13 @@ test.describe("חבורה מקוונת מול Supabase חי", () => {
       await enterOpeningChapter(memberPage);
       expect(new URL(memberPage.url()).searchParams.get("partySession")).toBe(sessionId);
       await expect(memberPage.getByRole("button", { name: "פתיחת דף הדמות" })).toContainText(memberCharacter);
+
+      await memberPage.goto(`/party?character=${encodeURIComponent(memberCharacterId)}`);
+      const leaveButton = memberPage.getByTestId("leave-party-button");
+      await expect(leaveButton).toBeVisible({ timeout: 30_000 });
+      await leaveButton.click();
+      await memberPage.getByRole("button", { name: "אישור", exact: true }).click();
+      await expect(memberPage.getByLabel("שם החבורה").first()).toBeVisible({ timeout: 30_000 });
     } finally {
       await closeContexts(contexts);
     }

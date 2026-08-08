@@ -9,18 +9,20 @@ import { getAssetPath } from "@/lib/assets/manifest";
 import { PartyCharacterPicker } from "@/components/party/PartyCharacterPicker";
 import { PartyEntryPanel } from "@/components/party/PartyEntryPanel";
 import { PartyRoomPanel } from "@/components/party/PartyRoomPanel";
+import { GameButton } from "@/components/ui/GameButton";
 import {
   closePartyAction,
   createPartyAction,
   joinPartyAction,
   leavePartyAction,
+  recoverPartyMembershipAction,
   removePartyMemberAction,
   setPartyReadyAction,
   startPartySessionAction,
   transferPartyLeadershipAction,
-  updatePartyConnectionAction,
 } from "@/lib/actions/party";
 import { PartyQueryError } from "@/lib/party/errors";
+import { PARTY_PRESENCE_HEARTBEAT_MS } from "@/lib/party/presence";
 import {
   fetchPartyLobbySnapshot,
   findActivePartyMembership,
@@ -40,12 +42,39 @@ type BusyAction =
   | "join"
   | "ready"
   | "start"
+  | "recover"
   | "leave"
   | "remove"
   | "transfer"
   | "close";
 
 type Notice = { kind: "success" | "info"; message: string } | null;
+
+const PARTY_OPERATION_TIMEOUT_MS = 12_000;
+
+class PartyOperationTimeoutError extends Error {
+  constructor() {
+    super("PARTY_OPERATION_TIMEOUT");
+    this.name = "PartyOperationTimeoutError";
+  }
+}
+
+async function withPartyOperationTimeout<T>(operation: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new PartyOperationTimeoutError()),
+          PARTY_OPERATION_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 type Props = {
   characters: PartyCharacterOption[];
@@ -93,7 +122,9 @@ export function PartyLobbyClient({
   const refreshLobby = useCallback(async (partyId: string) => {
     const sequence = ++refreshSequence.current;
     try {
-      const nextSnapshot = await fetchPartyLobbySnapshot(supabase, partyId);
+      const nextSnapshot = await withPartyOperationTimeout(
+        fetchPartyLobbySnapshot(supabase, partyId),
+      );
       if (sequence !== refreshSequence.current) return;
       if (!nextSnapshot) {
         setSnapshot(null);
@@ -112,6 +143,30 @@ export function PartyLobbyClient({
     }
   }, [supabase]);
 
+  const reconcileMembership = useCallback(async () => {
+    if (!selectedCharacterId) return { found: false, released: false };
+    const recovered = await withPartyOperationTimeout(
+      recoverPartyMembershipAction({ characterId: selectedCharacterId }),
+    );
+    if (!recovered.ok) throw new Error(recovered.message);
+    if (!recovered.data.partyId) {
+      setSnapshot(null);
+      setConnectionState("idle");
+      return { found: false, released: recovered.data.released };
+    }
+    const nextSnapshot = await withPartyOperationTimeout(
+      fetchPartyLobbySnapshot(supabase, recovered.data.partyId),
+    );
+    if (!nextSnapshot) {
+      setSnapshot(null);
+      setConnectionState("idle");
+      return { found: false, released: recovered.data.released };
+    }
+    setSnapshot(nextSnapshot);
+    setErrorMessage(null);
+    return { found: true, released: recovered.data.released };
+  }, [selectedCharacterId, supabase]);
+
   useEffect(() => {
     if (!activePartyId || !selectedCharacterId) {
       queueMicrotask(() => setConnectionState("idle"));
@@ -120,7 +175,39 @@ export function PartyLobbyClient({
 
     let active = true;
     let refreshTimer: number | null = null;
+    let presenceRequestInFlight = false;
     let reportedState: PartyConnectionState | null = null;
+
+    const touchPresence = async (
+      state: "connected" | "reconnecting" | "disconnected",
+    ) => {
+      if (!active || presenceRequestInFlight || (state !== "disconnected" && !navigator.onLine)) {
+        return;
+      }
+      presenceRequestInFlight = true;
+      try {
+        const result = await withPartyOperationTimeout(
+          supabase.rpc("update_party_connection", {
+            p_party_id: activePartyId,
+            p_character_id: selectedCharacterId,
+            p_connection_state: state,
+          }),
+        );
+        if (
+          active &&
+          result.error &&
+          (result.error.message.includes("AUTHENTICATION_REQUIRED") ||
+            result.error.message.includes("JWT"))
+        ) {
+          setErrorMessage("החיבור לחשבון פג. יש להתחבר מחדש כדי להמשיך בחבורה.");
+        }
+      } catch {
+        // Realtime and the fallback snapshot refresh remain active. The next
+        // heartbeat retries without locking the lobby controls.
+      } finally {
+        presenceRequestInFlight = false;
+      }
+    };
 
     const scheduleRefresh = () => {
       if (!active || refreshTimer !== null) return;
@@ -135,13 +222,13 @@ export function PartyLobbyClient({
       setConnectionState(state);
       if (state === reportedState || state === "idle" || state === "connecting") return;
       reportedState = state;
-      void updatePartyConnectionAction({
-        partyId: activePartyId,
-        characterId: selectedCharacterId,
-        connectionState: state === "connected" ? "connected" : state === "reconnecting" ? "reconnecting" : "disconnected",
-      }).then((result) => {
-        if (active && !result.ok && result.code === "AUTH_REQUIRED") setErrorMessage(result.message);
-      });
+      void touchPresence(
+        state === "connected"
+          ? "connected"
+          : state === "reconnecting"
+            ? "reconnecting"
+            : "disconnected",
+      );
     };
 
     const unsubscribe = subscribeToPartyLobby(supabase, activePartyId, {
@@ -154,8 +241,16 @@ export function PartyLobbyClient({
       scheduleRefresh();
     };
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") scheduleRefresh();
+      if (document.visibilityState === "visible") {
+        void touchPresence("connected");
+        scheduleRefresh();
+      }
     };
+    const heartbeat = window.setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void touchPresence("connected");
+      }
+    }, PARTY_PRESENCE_HEARTBEAT_MS);
     const fallbackRefresh = window.setInterval(scheduleRefresh, 15_000);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
@@ -164,6 +259,7 @@ export function PartyLobbyClient({
     return () => {
       active = false;
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      window.clearInterval(heartbeat);
       window.clearInterval(fallbackRefresh);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
@@ -181,18 +277,60 @@ export function PartyLobbyClient({
     setErrorMessage(null);
     setNotice(null);
     try {
-      const result = await operation();
+      const result = await withPartyOperationTimeout(operation());
       if (!result.ok) {
+        if (result.code === "CHARACTER_ALREADY_IN_PARTY") {
+          try {
+            const recovered = await reconcileMembership();
+            if (recovered.found) {
+              setNotice({ kind: "info", message: "החבורה הפעילה שוחזרה. אפשר להמשיך או לצאת ממנה בבטחה." });
+              return;
+            }
+          } catch {
+            // Preserve the authoritative action error when recovery is not available.
+          }
+        }
         setErrorMessage(result.message);
         return;
       }
       await onSuccess(result.data);
-    } catch {
-      setErrorMessage("לא הצלחנו להשלים את הפעולה. בדקו את החיבור ונסו שוב.");
+    } catch (error) {
+      if (error instanceof PartyOperationTimeoutError) {
+        try {
+          const recovered = await reconcileMembership();
+          setNotice(recovered.found
+            ? { kind: "info", message: "הפעולה התעכבה, אך מצב החבורה שוחזר מהשרת." }
+            : { kind: "info", message: "הפעולה התעכבה. הממשק שוחרר ואפשר לנסות שוב." });
+          return;
+        } catch {
+          setErrorMessage("השרת מתעכב. הממשק שוחרר ואפשר לנסות שוב בעוד רגע.");
+          return;
+        }
+      }
+      setErrorMessage(error instanceof Error && error.message !== "PARTY_OPERATION_TIMEOUT"
+        ? error.message
+        : "לא הצלחנו להשלים את הפעולה. בדקו את החיבור ונסו שוב.");
     } finally {
       setBusyAction(null);
     }
   }
+
+  const recoverMembership = () => {
+    if (!selectedCharacterId || busyAction) return;
+    setBusyAction("recover");
+    setErrorMessage(null);
+    setNotice(null);
+    void reconcileMembership()
+      .then((result) => {
+        setNotice(result.found
+          ? { kind: "success", message: "מצב החבורה שוחזר ואפשר להמשיך או לצאת." }
+          : result.released
+            ? { kind: "success", message: "החברות התקועה שוחררה. אפשר ליצור חבורה חדשה." }
+            : { kind: "info", message: "לא נמצאה חברות פעילה עבור הדמות הזאת." });
+      })
+      .catch(() => setErrorMessage("לא הצלחנו לשחזר את החבורה כרגע. נסו שוב בעוד רגע."))
+      .finally(() => setBusyAction(null));
+  };
 
   const selectCharacter = async (characterId: string) => {
     if (snapshot || busyAction) return;
@@ -226,7 +364,6 @@ export function PartyLobbyClient({
       async ({ partyId }) => {
         await refreshLobby(partyId);
         setNotice({ kind: "success", message: "החבורה נוצרה וקוד החדר מוכן לשיתוף." });
-        router.refresh();
       },
     );
   };
@@ -239,7 +376,6 @@ export function PartyLobbyClient({
       async ({ partyId }) => {
         await refreshLobby(partyId);
         setNotice({ kind: "success", message: "הצטרפת לחבורה." });
-        router.refresh();
       },
     );
   };
@@ -276,7 +412,6 @@ export function PartyLobbyClient({
         setSnapshot(null);
         setConnectionState("idle");
         setNotice({ kind: "info", message: "יצאת מהחבורה." });
-        router.refresh();
       },
     );
   };
@@ -290,7 +425,6 @@ export function PartyLobbyClient({
         setSnapshot(null);
         setConnectionState("idle");
         setNotice({ kind: "info", message: "החבורה נסגרה." });
-        router.refresh();
       },
     );
   };
@@ -348,8 +482,20 @@ export function PartyLobbyClient({
 
         <div className="mb-5 min-h-12" aria-live="polite" aria-atomic="true">
           {errorMessage ? (
-            <div className="flex items-start gap-3 border border-[#a43b4e]/45 bg-[#35131a]/90 p-3 text-sm text-[#ffe7e4]" role="alert">
-              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[#e87972]" /><span>{errorMessage}</span>
+            <div className="flex flex-wrap items-center gap-3 border border-[#a43b4e]/45 bg-[#35131a]/90 p-3 text-sm text-[#ffe7e4]" role="alert">
+              <AlertTriangle className="size-5 shrink-0 text-[#e87972]" /><span className="min-w-0 flex-1">{errorMessage}</span>
+              {!snapshot && selectedCharacter ? (
+                <GameButton
+                  size="sm"
+                  variant="secondary"
+                  loading={busyAction === "recover"}
+                  disabled={Boolean(busyAction)}
+                  onClick={recoverMembership}
+                  data-testid="recover-party-membership"
+                >
+                  שחזור החבורה
+                </GameButton>
+              ) : null}
             </div>
           ) : notice ? (
             <div className={`flex items-start gap-3 border p-3 text-sm ${notice.kind === "success" ? "border-[#5ca77a]/40 bg-[#183324]/90 text-[#c9f1d4]" : "border-[#62c6df]/35 bg-[#102b32]/90 text-[#c9edf4]"}`}>

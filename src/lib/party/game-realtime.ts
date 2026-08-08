@@ -1,4 +1,5 @@
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
+import { partyMemberIsPresent } from "@/lib/party/presence";
 import type { CombatState } from "@/types/game";
 import type { Database, Json } from "@/types/database";
 
@@ -113,7 +114,6 @@ const EVENT_COLUMNS =
   "id,session_id,event_type,payload,created_by_character_id,sequence_number,created_at";
 const VOTE_COLUMNS =
   "session_id,scene_id,decision_id,character_id,choice_id,created_at,updated_at";
-const PARTY_MEMBER_PRESENCE_WINDOW_MS = 60_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -220,49 +220,116 @@ function toCombatState(
 function toVoteState(
   votes: readonly PartyGameVote[],
   currentSceneId: string,
-  leaderCharacterId: string,
   memberCharacterIds: readonly string[],
+  sessionState: Readonly<Record<string, Json | undefined>>,
 ): PartyGameVoteState {
   const currentSceneVotes = votes.filter((vote) => vote.sceneId === currentSceneId);
   const grouped = new Map<string, PartyGameVote[]>();
 
   for (const vote of currentSceneVotes) {
-    const key = `${vote.sceneId}\u0000${vote.decisionId}`;
-    const decisionVotes = grouped.get(key);
+    const decisionVotes = grouped.get(vote.decisionId);
     if (decisionVotes) decisionVotes.push(vote);
-    else grouped.set(key, [vote]);
+    else grouped.set(vote.decisionId, [vote]);
   }
 
-  const decisions = [...grouped.values()]
-    .map((decisionVotes): PartyGameDecisionState => {
-      const firstVote = decisionVotes[0];
+  const persistedDecisions: Array<{
+    sceneId: string;
+    decisionId: string;
+    choiceId: string;
+    submittedVotes: number;
+    requiredVotes: number;
+    leaderBrokeTie: boolean;
+    resolvedAt: string | null;
+  }> = [];
+  const allPersisted = isRecord(sessionState.resolved_votes) ? sessionState.resolved_votes : {};
+  for (const [sceneId, rawScene] of Object.entries(allPersisted)) {
+    if (!isRecord(rawScene)) continue;
+    for (const [decisionId, rawResolution] of Object.entries(rawScene)) {
+      if (!isRecord(rawResolution) || typeof rawResolution.choice_id !== "string") continue;
+      const winningVotes = typeof rawResolution.votes === "number" && Number.isInteger(rawResolution.votes)
+        ? Math.max(0, rawResolution.votes)
+        : 0;
+      const submittedVotes = typeof rawResolution.submitted_votes === "number" && Number.isInteger(rawResolution.submitted_votes)
+        ? Math.max(0, rawResolution.submitted_votes)
+        : winningVotes;
+      const requiredVotes = typeof rawResolution.required_votes === "number" && Number.isInteger(rawResolution.required_votes)
+        ? Math.max(0, rawResolution.required_votes)
+        : submittedVotes;
+      persistedDecisions.push({
+        sceneId,
+        decisionId,
+        choiceId: rawResolution.choice_id,
+        submittedVotes,
+        requiredVotes,
+        leaderBrokeTie: rawResolution.leader_broke_tie === true,
+        resolvedAt: typeof rawResolution.resolved_at === "string" ? rawResolution.resolved_at : null,
+      });
+    }
+  }
+
+  const persistedCurrent = new Map(
+    persistedDecisions
+      .filter((decision) => decision.sceneId === currentSceneId)
+      .map((decision) => [decision.decisionId, decision] as const),
+  );
+  const currentDecisionIds = new Set([...grouped.keys(), ...persistedCurrent.keys()]);
+  const decisionsWithOrder: Array<{
+    decision: PartyGameDecisionState;
+    resolvedAt: string | null;
+  }> = [...currentDecisionIds]
+    .map((decisionId) => {
+      const decisionVotes = grouped.get(decisionId) ?? [];
       const choiceCounts: Record<string, number> = {};
       for (const vote of decisionVotes) {
         choiceCounts[vote.choiceId] = (choiceCounts[vote.choiceId] ?? 0) + 1;
       }
-      const allVotesSubmitted = decisionVotes.length >= memberCharacterIds.length && memberCharacterIds.length > 0;
-      const leaderChoice = decisionVotes.find((vote) => vote.characterId === leaderCharacterId)?.choiceId;
-      const rankedChoices = Object.entries(choiceCounts).sort(([leftChoice, leftVotes], [rightChoice, rightVotes]) => {
-        if (rightVotes !== leftVotes) return rightVotes - leftVotes;
-        if (leaderChoice === leftChoice && leaderChoice !== rightChoice) return -1;
-        if (leaderChoice === rightChoice && leaderChoice !== leftChoice) return 1;
-        return leftChoice.localeCompare(rightChoice);
-      });
-      const resolvedChoiceId = allVotesSubmitted ? rankedChoices[0]?.[0] ?? null : null;
-      const highestVoteCount = rankedChoices[0]?.[1] ?? 0;
-      const tiedAtTop = rankedChoices.filter(([, count]) => count === highestVoteCount).length > 1;
+      const persisted = persistedCurrent.get(decisionId);
+      const resolvedChoiceId = persisted?.choiceId ?? null;
       return {
-        sceneId: firstVote.sceneId,
-        decisionId: firstVote.decisionId,
-        totalVotes: decisionVotes.length,
-        requiredVotes: memberCharacterIds.length,
-        choiceCounts,
-        votes: decisionVotes,
-        resolvedChoiceId,
-        leaderBrokeTie: Boolean(resolvedChoiceId && tiedAtTop && resolvedChoiceId === leaderChoice),
+        resolvedAt: persisted?.resolvedAt ?? null,
+        decision: {
+          sceneId: currentSceneId,
+          decisionId,
+          totalVotes: decisionVotes.length,
+          requiredVotes: memberCharacterIds.length,
+          choiceCounts,
+          votes: decisionVotes,
+          resolvedChoiceId,
+          leaderBrokeTie: persisted?.leaderBrokeTie ?? false,
+        },
       };
+    });
+
+  for (const persisted of persistedDecisions) {
+    if (persisted.sceneId === currentSceneId) continue;
+    decisionsWithOrder.push({
+      resolvedAt: persisted.resolvedAt,
+      decision: {
+        sceneId: persisted.sceneId,
+        decisionId: persisted.decisionId,
+        totalVotes: persisted.submittedVotes,
+        requiredVotes: persisted.requiredVotes,
+        choiceCounts: {},
+        votes: [],
+        resolvedChoiceId: persisted.choiceId,
+        leaderBrokeTie: persisted.leaderBrokeTie,
+      },
+    });
+  }
+
+  const decisions = decisionsWithOrder
+    .sort((left, right) => {
+      if (left.resolvedAt && right.resolvedAt && left.resolvedAt !== right.resolvedAt) {
+        return left.resolvedAt.localeCompare(right.resolvedAt);
+      }
+      if (left.resolvedAt && !right.resolvedAt) return -1;
+      if (!left.resolvedAt && right.resolvedAt) return 1;
+      if (left.decision.sceneId !== right.decision.sceneId) {
+        return left.decision.sceneId.localeCompare(right.decision.sceneId);
+      }
+      return left.decision.decisionId.localeCompare(right.decision.decisionId);
     })
-    .sort((left, right) => left.decisionId.localeCompare(right.decisionId));
+    .map(({ decision }) => decision);
 
   return { currentSceneVotes, decisions };
 }
@@ -369,12 +436,8 @@ export async function fetchPartyGameSnapshot(
       createdAt: event.created_at,
     }))
     .reverse();
-  const presenceCutoff = Date.now() - PARTY_MEMBER_PRESENCE_WINDOW_MS;
   const memberCharacterIds = (membersResult.data ?? [])
-    .filter((member) =>
-      (member.connection_state === "connected" || member.connection_state === "reconnecting") &&
-      new Date(member.last_seen_at).getTime() >= presenceCutoff,
-    )
+    .filter((member) => partyMemberIsPresent(member))
     .map((member) => member.character_id);
   const activeMemberIds = new Set(memberCharacterIds);
   const votes: PartyGameVote[] = (votesResult.data ?? [])
@@ -397,13 +460,19 @@ export async function fetchPartyGameSnapshot(
     votes,
     scene: toSceneState(session, combat),
     combat,
-    voteState: toVoteState(votes, session.currentSceneId, leaderCharacterId, memberCharacterIds),
+    voteState: toVoteState(
+      votes,
+      session.currentSceneId,
+      memberCharacterIds,
+      session.state,
+    ),
   };
 }
 
 export function subscribeToPartyGame(
   supabase: PartyGameSupabaseClient,
   sessionId: string,
+  partyId: string,
   callbacks: PartyGameRealtimeCallbacks,
 ): () => void {
   let wasConnected = false;
@@ -433,7 +502,7 @@ export function subscribeToPartyGame(
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "party_members" },
+      { event: "*", schema: "public", table: "party_members", filter: `party_id=eq.${partyId}` },
       (payload) => {
         const previous = isRecord(payload.old) ? payload.old : {};
         const current = isRecord(payload.new) ? payload.new : {};

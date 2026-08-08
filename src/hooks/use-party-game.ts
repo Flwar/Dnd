@@ -13,6 +13,7 @@ import {
   PartyGameQueryError,
   subscribeToPartyGame,
 } from "@/lib/party/game-realtime";
+import { PARTY_PRESENCE_HEARTBEAT_MS } from "@/lib/party/presence";
 import type {
   PartyGameCombatState,
   PartyGameConnectionState,
@@ -27,7 +28,31 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 const REFRESH_DEBOUNCE_MS = 100;
 const FALLBACK_REFRESH_MS = 15_000;
-const PARTY_HEARTBEAT_MS = 20_000;
+const PARTY_GAME_REQUEST_TIMEOUT_MS = 12_000;
+
+class PartyGameRequestTimeoutError extends Error {
+  constructor() {
+    super("PARTY_GAME_REQUEST_TIMEOUT");
+    this.name = "PartyGameRequestTimeoutError";
+  }
+}
+
+async function withPartyGameTimeout<T>(request: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      request,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new PartyGameRequestTimeoutError()),
+          PARTY_GAME_REQUEST_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 const CONNECTION_MESSAGES: Record<PartyGameConnectionState, string> = {
   connecting: "מתחברים למשחק המשותף…",
@@ -142,7 +167,9 @@ export function usePartyGame({
     if (mountedRef.current) setIsLoading(stateRef.current === null);
 
     try {
-      const nextState = await fetchPartyGameSnapshot(supabase, sessionId);
+      const nextState = await withPartyGameTimeout(
+        fetchPartyGameSnapshot(supabase, sessionId),
+      );
       if (!mountedRef.current || sequence !== refreshSequenceRef.current) return nextState;
 
       if (!nextState) {
@@ -158,13 +185,17 @@ export function usePartyGame({
       return nextState;
     } catch (refreshError) {
       if (mountedRef.current && sequence === refreshSequenceRef.current) {
-        setError(queryErrorMessage(refreshError));
+        setError(refreshError instanceof PartyGameRequestTimeoutError
+          ? "שרת החבורה מתעכב. אפשר לנסות לרענן מבלי להיתקע במסך טעינה."
+          : queryErrorMessage(refreshError));
       }
       return null;
     } finally {
       if (mountedRef.current && sequence === refreshSequenceRef.current) setIsLoading(false);
     }
   }, [enabled, sessionId, supabase]);
+
+  const activePartyId = state?.session.partyId ?? null;
 
   useEffect(() => {
     if (!enabled || !supabase || !sessionId) {
@@ -187,10 +218,12 @@ export function usePartyGame({
       setConnectionState(nextState);
     };
 
-    const unsubscribe = subscribeToPartyGame(supabase, sessionId, {
-      onChange: scheduleRefresh,
-      onConnectionChange: reportConnection,
-    });
+    const unsubscribe = activePartyId
+      ? subscribeToPartyGame(supabase, sessionId, activePartyId, {
+          onChange: scheduleRefresh,
+          onConnectionChange: reportConnection,
+        })
+      : () => undefined;
     const handleOffline = () => reportConnection("disconnected");
     const handleOnline = () => {
       reportConnection("reconnecting");
@@ -215,27 +248,37 @@ export function usePartyGame({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unsubscribe();
     };
-  }, [enabled, refresh, sessionId, supabase]);
-
-  const activePartyId = state?.session.partyId ?? null;
+  }, [activePartyId, enabled, refresh, sessionId, supabase]);
 
   useEffect(() => {
     if (!enabled || !supabase || !activePartyId || !characterId) return;
     let active = true;
+    let presenceRequestInFlight = false;
 
     const reportPresence = async (connectionState: "connected" | "disconnected") => {
-      const result = await supabase.rpc("update_party_connection", {
-        p_party_id: activePartyId,
-        p_character_id: characterId,
-        p_connection_state: connectionState,
-      });
-      if (
-        active &&
-        result.error &&
-        (result.error.message.includes("AUTHENTICATION_REQUIRED") ||
-          result.error.message.includes("JWT"))
-      ) {
-        setError("החיבור לחשבון פג. יש להתחבר מחדש כדי להמשיך במשחק המשותף.");
+      if (presenceRequestInFlight || (connectionState === "connected" && !navigator.onLine)) return;
+      presenceRequestInFlight = true;
+      try {
+        const result = await withPartyGameTimeout(
+          supabase.rpc("update_party_connection", {
+            p_party_id: activePartyId,
+            p_character_id: characterId,
+            p_connection_state: connectionState,
+          }),
+        );
+        if (
+          active &&
+          result.error &&
+          (result.error.message.includes("AUTHENTICATION_REQUIRED") ||
+            result.error.message.includes("JWT"))
+        ) {
+          setError("החיבור לחשבון פג. יש להתחבר מחדש כדי להמשיך במשחק המשותף.");
+        }
+      } catch {
+        // A later heartbeat retries. Gameplay commands keep their own error
+        // path and are not blocked by a slow presence update.
+      } finally {
+        presenceRequestInFlight = false;
       }
     };
 
@@ -250,7 +293,7 @@ export function usePartyGame({
     };
 
     heartbeat();
-    const interval = window.setInterval(heartbeat, PARTY_HEARTBEAT_MS);
+    const interval = window.setInterval(heartbeat, PARTY_PRESENCE_HEARTBEAT_MS);
     window.addEventListener("online", handleOnline);
     document.addEventListener("visibilitychange", handleVisibility);
 
@@ -259,7 +302,6 @@ export function usePartyGame({
       window.clearInterval(interval);
       window.removeEventListener("online", handleOnline);
       document.removeEventListener("visibilitychange", handleVisibility);
-      void reportPresence("disconnected");
     };
   }, [activePartyId, characterId, enabled, supabase]);
 
@@ -319,20 +361,25 @@ export function usePartyGame({
           payload,
           timestamp: new Date().toISOString(),
         };
-        const result = await submitPartyGameCommandAction(input);
+        const result = await withPartyGameTimeout(
+          submitPartyGameCommandAction(input),
+        );
         if (!result.ok) {
           submittedVersionRef.current = null;
         }
         await refresh();
         if (!result.ok && mountedRef.current) setError(result.message);
         return result;
-      } catch {
+      } catch (submissionError) {
         const failure = localFailure(
           "NO_SESSION",
-          "לא הצלחנו לשלוח את הפעולה. בדקו את החיבור ונסו שוב.",
+          submissionError instanceof PartyGameRequestTimeoutError
+            ? "השרת מתעכב. הממשק שוחרר ומצב החבורה מתרענן לפני ניסיון נוסף."
+            : "לא הצלחנו לשלוח את הפעולה. בדקו את החיבור ונסו שוב.",
         );
         if (mountedRef.current) setError(failure.message);
         submittedVersionRef.current = null;
+        void refresh();
         return failure;
       } finally {
         submittingRef.current = false;
@@ -354,7 +401,7 @@ export function usePartyGame({
     voteState: currentState?.voteState ?? EMPTY_VOTE_STATE,
     connectionState,
     connectionMessage: CONNECTION_MESSAGES[connectionState],
-    isLoading: enabled && (isLoading || currentState === null),
+    isLoading: enabled && isLoading,
     isSubmitting,
     error,
     refresh,

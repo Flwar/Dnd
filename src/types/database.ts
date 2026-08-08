@@ -536,6 +536,10 @@ export type Database = {
         Args: { p_party_id: string; p_character_id: string };
         Returns: Json;
       };
+      recover_party_membership: {
+        Args: { p_character_id: string };
+        Returns: Json;
+      };
       remove_party_member: {
         Args: { p_party_id: string; p_character_id: string };
         Returns: Json;
@@ -578,6 +582,7 @@ export type Database = {
           p_command_id: string;
           p_session_id: string;
           p_character_id: string;
+          p_owner_id: string;
           p_scene_id: string;
           p_decision_id: string;
           p_choice_id: string;

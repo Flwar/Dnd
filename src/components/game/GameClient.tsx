@@ -12,8 +12,12 @@ import { GameModeShell } from "@/components/game/GameModeShell";
 import { OpeningCinematic } from "@/components/game/OpeningCinematic";
 import { DialoguePanel } from "@/components/dialogue/DialoguePanel";
 import { GameStoreProvider, useGameStore } from "@/store/game-store";
-import { saveGameAction, completeChapterAction } from "@/lib/actions/game";
+import { saveGameAction, completeChapterAction, type SaveActionResult } from "@/lib/actions/game";
 import { applyEffectsToSave, createPlayerCombatant, travelToLocation } from "@/lib/game/session-state";
+import {
+  executeCharacterSaveSafely,
+  LatestSaveCoordinator,
+} from "@/lib/game/save-coordinator";
 import { validateAndMigrateSave } from "@/game/persistence";
 import { resolveSkillCheck, nextRandom } from "@/game/dice";
 import { addItem, dropItem, equipItem, equipmentStatBonuses, unequipItem, useItem as consumeInventoryItem } from "@/game/inventory";
@@ -30,6 +34,10 @@ import { classesById } from "@/content/classes";
 import { npcsById } from "@/content/npcs";
 import { consequenceEffects, type VisibleConsequence } from "@/content/consequences";
 import { audioManager } from "@/lib/audio/audio-manager";
+import {
+  findResumablePartyDialogueNode,
+  findUnappliedHistoricalPartyDialogueChoices,
+} from "@/lib/party/dialogue-recovery";
 import type {
   CombatAction,
   CombatState,
@@ -242,7 +250,7 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
   const setChapterComplete = useGameStore((state) => state.setChapterComplete);
   const saveRef = useRef(save);
   const versionRef = useRef(expectedVersion);
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const saveCoordinatorRef = useRef<LatestSaveCoordinator<SaveData, SaveActionResult> | null>(null);
   const lastClockRef = useRef<number | null>(null);
   const recoveredCacheRef = useRef(false);
   const resolvedCombatRef = useRef(new Set<string>());
@@ -258,6 +266,8 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
   const onlineParty = Boolean(partySessionId);
   const isPartyLeader = partyGame.state?.party.leaderCharacterId === save.character.id;
   const pendingPartyChecksRef = useRef(new Set<string>());
+  const observedPartyInteractionsRef = useRef(new Set<string>());
+  const caughtUpPartyChoicesRef = useRef(new Set<string>());
 
   const cacheKey = `shattered-crown:save:${save.character.id}`;
 
@@ -300,21 +310,46 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
   const persistSnapshot = useCallback((snapshot: SaveData, reason: string): Promise<void> => {
     if (typeof window !== "undefined") localStorage.setItem(cacheKey, JSON.stringify({ save: snapshot, pending: true }));
     setSaveStatus("saving");
-    const task = saveQueueRef.current.then(async () => {
-      const result = await saveGameAction(snapshot, versionRef.current, reason, makeId("save-command"));
-      if (result.ok) {
-        versionRef.current = result.saveVersion;
-        setExpectedVersion(result.saveVersion);
-        setSaveStatus("saved");
-        if (typeof window !== "undefined") localStorage.setItem(cacheKey, JSON.stringify({ save: snapshot, pending: false }));
-        if (reason === "manual-save") notify("save", "המשחק נשמר", "ההתקדמות עודכנה בענן.", "manual-save");
-      } else {
+
+    if (!saveCoordinatorRef.current) {
+      saveCoordinatorRef.current = new LatestSaveCoordinator<SaveData, SaveActionResult>({
+        makeCommandId: () => makeId("save-command"),
+        shouldContinue: (result) => result.ok,
+        execute: async (queuedSnapshot, queuedReason, commandId) => {
+          const result = await executeCharacterSaveSafely<SaveActionResult>(
+            queuedSnapshot.character.id,
+            () => saveGameAction(queuedSnapshot, versionRef.current, queuedReason, commandId),
+            () => ({
+              ok: false,
+              code: "network",
+              message: "החיבור לענן נותק. ההתקדמות נשמרה במכשיר ותישלח שוב בפעולה הבאה.",
+            }),
+          );
+          if (result.ok) {
+            versionRef.current = result.saveVersion;
+            setExpectedVersion(result.saveVersion);
+            const hasNewerSnapshot = saveCoordinatorRef.current?.hasPending() === true;
+            setSaveStatus(hasNewerSnapshot ? "saving" : "saved");
+            if (typeof window !== "undefined" && !hasNewerSnapshot) {
+              localStorage.setItem(cacheKey, JSON.stringify({ save: queuedSnapshot, pending: false }));
+            }
+            if (queuedReason === "manual-save") notify("save", "המשחק נשמר", "ההתקדמות עודכנה בענן.", "manual-save");
+          } else {
+            setSaveStatus(result.code === "conflict" ? "conflict" : result.code === "network" ? "offline" : "error");
+            notify(result.code === "conflict" ? "error" : "connection", result.code === "conflict" ? "התנגשות שמירה" : "השמירה ממתינה", result.message, `save-${result.code}`);
+          }
+          return result;
+        },
+      });
+    }
+
+    const coordinator = saveCoordinatorRef.current;
+    const coolingDown = coordinator.isCoolingDown();
+    return coordinator.enqueue(snapshot, reason).then((result) => {
+      if (coolingDown && !result.ok) {
         setSaveStatus(result.code === "conflict" ? "conflict" : result.code === "network" ? "offline" : "error");
-        notify(result.code === "conflict" ? "error" : "connection", result.code === "conflict" ? "התנגשות שמירה" : "השמירה ממתינה", result.message, `save-${result.code}`);
       }
     });
-    saveQueueRef.current = task.catch(() => undefined);
-    return task;
   }, [cacheKey, notify, setExpectedVersion, setSaveStatus]);
 
   const commit = useCallback((next: SaveData, reason: string, checkpoint = false): Promise<void> => {
@@ -466,13 +501,29 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
     const currentScene = currentSceneId ? openingScenesById[currentSceneId] : undefined;
     let next = saveRef.current;
     let changed = false;
+    let dialogueToRestore: string | null = null;
     for (const interactionId of Object.keys(resolved)) {
       const appliedFlag = `party_interaction_${interactionId}_applied`;
-      if (next.story.flags[appliedFlag]) continue;
+      const observationKey = `${partyGame.session.id}:${partyGame.session.currentSceneId}:${interactionId}`;
       const interaction = Object.values(locationsById)
         .flatMap((location) => location.interactions)
         .find((candidate) => candidate.id === interactionId);
       if (!interaction || interaction.skillCheck) continue;
+      if (next.story.flags[appliedFlag]) {
+        if (
+          !observedPartyInteractionsRef.current.has(observationKey) &&
+          interaction.dialogueNodeId &&
+          currentScene?.interactionIds.includes(interaction.id)
+        ) {
+          dialogueToRestore = findResumablePartyDialogueNode(
+            interaction.dialogueNodeId,
+            partyGame.voteState.decisions,
+          ) ?? dialogueToRestore;
+        }
+        observedPartyInteractionsRef.current.add(observationKey);
+        continue;
+      }
+      observedPartyInteractionsRef.current.add(observationKey);
       next = applyEffects(next, interaction.effects ?? [], `party-interaction:${interaction.id}`);
       next = withStoryFlag(next, appliedFlag, true);
       if (interaction.oneTime) next = withStoryFlag(next, `interaction_${interaction.id}_completed`, true);
@@ -481,8 +532,9 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
       }
       changed = true;
     }
+    if (!dialogueNodeId && dialogueToRestore) setDialogueNodeId(dialogueToRestore);
     if (changed) void commit(next, "party-interaction-sync");
-  }, [applyEffects, commit, onlineParty, openDialogue, partyGame.scene?.authoredId, partyGame.session]);
+  }, [applyEffects, commit, dialogueNodeId, onlineParty, openDialogue, partyGame.scene?.authoredId, partyGame.session, partyGame.voteState.decisions, setDialogueNodeId]);
 
   const beginEncounter = useCallback((current: SaveData, encounterId: string) => {
     const encounter = encountersById[encounterId];
@@ -711,8 +763,75 @@ function GameRuntime({ partySessionId }: { partySessionId?: string }) {
 
   useEffect(() => {
     if (!onlineParty || !partyGame.session) return;
+    const historical = findUnappliedHistoricalPartyDialogueChoices(
+      partyGame.session.currentSceneId,
+      partyGame.voteState.decisions,
+      saveRef.current.story.flags,
+    ).filter(({ sceneId, choice }) =>
+      !caughtUpPartyChoicesRef.current.has(`${sceneId}:${choice.id}`),
+    );
+    if (!historical.length) return;
+
+    const checks = asRecord(partyGame.session.state.skill_checks) ?? {};
+    let next = saveRef.current;
+    let changed = false;
+    let caughtUpChapterCompletion = false;
+
+    for (const { sceneId, node, choice } of historical) {
+      const catchUpKey = `${sceneId}:${choice.id}`;
+      const selectedKey = `dialogue_choice_${choice.id}_selected`;
+      if (next.story.flags[selectedKey]) {
+        caughtUpPartyChoicesRef.current.add(catchUpKey);
+        continue;
+      }
+
+      let effects: StoryEffect[] = [...(choice.effects ?? [])];
+      if (choice.skillCheck) {
+        const roll = partyDiceResult(checks[choice.id]);
+        // A scene cannot legitimately advance past a checked choice before its
+        // authoritative roll exists. Keep the choice pending rather than
+        // inventing a client roll during reconnect recovery.
+        if (!roll) break;
+        effects = [...effects, ...effectsForRoll(choice.skillCheck, roll.outcome)];
+      }
+
+      const enteredKey = `dialogue_${node.id}_entered`;
+      if (!next.story.flags[enteredKey]) {
+        next = applyEffects(next, node.onEnterEffects ?? [], `party-dialogue-catchup-enter:${node.id}`, false);
+        next = withStoryFlag(next, enteredKey, true);
+      }
+      next = applyEffects(next, effects, `party-dialogue-catchup-choice:${choice.id}`, false);
+      next = withStoryFlag(next, selectedKey, true);
+
+      if (node.id === "grey-woman-vision" && choice.exitAction === "close") {
+        next = withStoryFlag(next, "return_to_arfelon", true);
+      }
+      if (node.id.startsWith("elric-aftermath-") && choice.exitAction === "close") {
+        next = applyEffects(next, [
+          { kind: "quest-objective", questId: "shadows-beneath-village", objectiveId: "return-to-village", status: "completed" },
+        ], "party-dialogue-catchup-chapter-return", false);
+        next = withStoryFlag(next, "chapter_one_completed", true);
+        caughtUpChapterCompletion = true;
+      }
+
+      caughtUpPartyChoicesRef.current.add(catchUpKey);
+      changed = true;
+    }
+
+    if (!changed) return;
+    void commit(next, "party-dialogue-catchup", caughtUpChapterCompletion).then(() => {
+      if (!caughtUpChapterCompletion) return;
+      return completeChapterAction(next.character.id, makeId("chapter-catchup")).then((result) => {
+        if (!result.ok) notify("error", "פרס הפרק ממתין", result.message, "chapter-reward-catchup-pending");
+      });
+    });
+  }, [applyEffects, commit, notify, onlineParty, partyGame.session, partyGame.voteState.decisions]);
+
+  useEffect(() => {
+    if (!onlineParty || !partyGame.session) return;
     const checks = asRecord(partyGame.session.state.skill_checks) ?? {};
     for (const decision of partyGame.voteState.decisions) {
+      if (decision.sceneId !== partyGame.session.currentSceneId) continue;
       if (!decision.resolvedChoiceId) continue;
       const node = dialoguesById[decision.decisionId];
       const choice = node?.choices.find((candidate) => candidate.id === decision.resolvedChoiceId);

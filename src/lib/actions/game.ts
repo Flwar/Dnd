@@ -30,11 +30,19 @@ export async function saveGameAction(input: SaveData, expectedSaveVersion: numbe
     });
     if (error) {
       if (error.message.includes("VERSION") || error.message.includes("CONFLICT")) return { ok: false, code: "conflict", message: "נמצאה שמירה חדשה יותר בענן. טוענים אותה לפני המשך המשחק." };
+      if (
+        error.code === "55P03" ||
+        error.message.includes("SAVE_IN_PROGRESS") ||
+        error.message.includes("SAVE_BUSY")
+      ) {
+        return { ok: false, code: "network", message: "שמירה אחרת עדיין מסתיימת. ההתקדמות נשמרה במכשיר ותישלח שוב בפעולה הבאה." };
+      }
       return { ok: false, code: "network", message: "לא הצלחנו לשמור בענן. ננסה שוב בפעולה הבאה." };
     }
     const result = data as { save_version?: number; snapshot_id?: string } | null;
-    revalidatePath(`/game/${parsed.data.character.id}`);
-    revalidatePath("/menu");
+    // Game state is already updated optimistically in the client. Revalidating
+    // the active route after every autosave forces an unnecessary RSC refresh
+    // and can remount save producers while PostgREST is under pressure.
     return { ok: true, saveVersion: result?.save_version ?? expectedSaveVersion + 1, snapshotId: result?.snapshot_id };
   } catch {
     return { ok: false, code: "network", message: "החיבור לענן נותק. עותק זמני נשמר במכשיר." };

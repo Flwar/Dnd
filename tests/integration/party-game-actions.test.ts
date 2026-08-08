@@ -555,16 +555,7 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
       current_scene_id: "scene-village-leader",
       session_state: { current_location_id: "headman-house" },
     });
-    const userClient = createUserClient(currentSession, {
-      data: {
-        command_id: COMMAND_ID,
-        status: "accepted",
-        duplicate: false,
-        session_version: 4,
-        result: { vote_recorded: true },
-      },
-      error: null,
-    });
+    const userClient = createUserClient(currentSession);
     const members = queryBuilder({
       data: [
         {
@@ -588,9 +579,28 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
       error: null,
     });
     const serviceRpc = vi.fn(async (name: string) => {
+      if (name === "submit_party_dialogue_vote") {
+        return {
+          data: {
+            command_id: COMMAND_ID,
+            status: "accepted",
+            duplicate: false,
+            session_version: 4,
+            result: { vote_recorded: true },
+          },
+          error: null,
+        };
+      }
       if (name === "resolve_party_vote") {
         return {
-          data: { choice_id: "elric-accept", votes: 1, leader_broke_tie: true },
+          data: {
+            choice_id: "elric-accept",
+            votes: 1,
+            submitted_votes: 2,
+            required_votes: 2,
+            leader_broke_tie: true,
+            session_version: 5,
+          },
           error: null,
         };
       }
@@ -605,10 +615,11 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
 
     const result = await submitPartyGameCommandAction(input);
 
-    expect(userClient.rpc).toHaveBeenCalledWith("submit_party_dialogue_vote", {
+    expect(serviceRpc).toHaveBeenCalledWith("submit_party_dialogue_vote", {
       p_command_id: COMMAND_ID,
       p_session_id: SESSION_ID,
       p_character_id: CHARACTER_ID,
+      p_owner_id: USER_ID,
       p_scene_id: "scene-village-leader",
       p_decision_id: "elric-quest",
       p_choice_id: "elric-accept",
@@ -616,7 +627,7 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
     expect(result).toMatchObject({
       ok: true,
       data: {
-        sessionVersion: 4,
+        sessionVersion: 5,
         resolvedVote: {
           choiceId: "elric-accept",
           votes: 1,
@@ -635,6 +646,83 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
       "apply_party_command_result",
       expect.anything(),
     );
+  });
+
+  it("משאיר הצבעת דיאלוג בהמתנה כאשר הספירה האטומית כוללת חבר שטרם הצביע", async () => {
+    const input: PartyGameCommandInput<"SUBMIT_DIALOGUE_VOTE"> = {
+      ...moveInput(),
+      type: "SUBMIT_DIALOGUE_VOTE",
+      payload: {
+        sceneId: "scene-village-leader",
+        decisionId: "elric-quest",
+        choiceId: "elric-accept",
+      },
+    };
+    const userClient = createUserClient(session({
+      current_scene_id: "scene-village-leader",
+      session_state: { current_location_id: "headman-house" },
+    }));
+    const serviceRpc = vi.fn(async (name: string) => {
+      if (name === "submit_party_dialogue_vote") {
+        return {
+          data: {
+            command_id: COMMAND_ID,
+            status: "accepted",
+            duplicate: false,
+            session_version: 4,
+            result: { vote_recorded: true },
+          },
+          error: null,
+        };
+      }
+      if (name === "resolve_party_vote") {
+        return {
+          data: {
+            pending: true,
+            submitted_votes: 1,
+            required_votes: 2,
+            duplicate: false,
+          },
+          error: null,
+        };
+      }
+      throw new Error(`Unexpected service RPC: ${name}`);
+    });
+    mockedSupabase.createUserClient.mockResolvedValue(userClient);
+    mockedSupabase.createServiceClient.mockReturnValue({
+      from: vi.fn(),
+      rpc: serviceRpc,
+    } as unknown as SupabaseClient<Database>);
+
+    const result = await submitPartyGameCommandAction(input);
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        commandId: COMMAND_ID,
+        status: "accepted",
+        sessionVersion: 4,
+        result: {
+          vote_recorded: true,
+          submitted_votes: 1,
+          required_votes: 2,
+        },
+      },
+    });
+    expect(serviceRpc).toHaveBeenCalledWith("resolve_party_vote", {
+      p_session_id: SESSION_ID,
+      p_scene_id: "scene-village-leader",
+      p_decision_id: "elric-quest",
+    });
+    expect(serviceRpc).toHaveBeenCalledWith("submit_party_dialogue_vote", {
+      p_command_id: COMMAND_ID,
+      p_session_id: SESSION_ID,
+      p_character_id: CHARACTER_ID,
+      p_owner_id: USER_ID,
+      p_scene_id: "scene-village-leader",
+      p_decision_id: "elric-quest",
+      p_choice_id: "elric-accept",
+    });
   });
 
   it("פותח envelope של שמירת ענן לפני אימות תנאי בחירת דיאלוג", async () => {
@@ -656,16 +744,7 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
     const cloudEnvelope = createCloudSaveEnvelope(save) as unknown as Json;
     const userClient = createUserClient(
       currentSession,
-      {
-        data: {
-          command_id: COMMAND_ID,
-          status: "accepted",
-          duplicate: false,
-          session_version: 4,
-          result: { vote_recorded: true },
-        },
-        error: null,
-      },
+      { data: null, error: null },
       cloudEnvelope,
     );
     const members = queryBuilder({
@@ -682,10 +761,34 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
     });
     const serviceClient = {
       from: vi.fn((table: string) => table === "party_members" ? members : votes),
-      rpc: vi.fn(async () => ({
-        data: { choice_id: "thal-medicine", votes: 1, leader_broke_tie: true },
-        error: null,
-      })),
+      rpc: vi.fn(async (name: string) => {
+        if (name === "submit_party_dialogue_vote") {
+          return {
+            data: {
+              command_id: COMMAND_ID,
+              status: "accepted",
+              duplicate: false,
+              session_version: 4,
+              result: { vote_recorded: true },
+            },
+            error: null,
+          };
+        }
+        if (name === "resolve_party_vote") {
+          return {
+            data: {
+              choice_id: "thal-medicine",
+              votes: 1,
+              submitted_votes: 1,
+              required_votes: 1,
+              leader_broke_tie: false,
+              session_version: 5,
+            },
+            error: null,
+          };
+        }
+        throw new Error(`Unexpected service RPC: ${name}`);
+      }),
     } as unknown as SupabaseClient<Database>;
     mockedSupabase.createUserClient.mockResolvedValue(userClient);
     mockedSupabase.createServiceClient.mockReturnValue(serviceClient);
@@ -699,18 +802,16 @@ describe("מתאם פקודות סמכותי למשחק חבורה", () => {
     expect(userClient.rpc).toHaveBeenNthCalledWith(1, "get_latest_character_save", {
       p_character_id: CHARACTER_ID,
     });
-    expect(userClient.rpc).toHaveBeenNthCalledWith(
-      2,
-      "submit_party_dialogue_vote",
-      {
-        p_command_id: COMMAND_ID,
-        p_session_id: SESSION_ID,
-        p_character_id: CHARACTER_ID,
-        p_scene_id: "scene-preparation",
-        p_decision_id: "thal-corruption",
-        p_choice_id: "thal-medicine",
-      },
-    );
+    expect(userClient.rpc).toHaveBeenCalledTimes(1);
+    expect(serviceClient.rpc).toHaveBeenCalledWith("submit_party_dialogue_vote", {
+      p_command_id: COMMAND_ID,
+      p_session_id: SESSION_ID,
+      p_character_id: CHARACTER_ID,
+      p_owner_id: USER_ID,
+      p_scene_id: "scene-preparation",
+      p_decision_id: "thal-corruption",
+      p_choice_id: "thal-medicine",
+    });
   });
 
   it("גוזר שלל משותף מן המפגש הנעול ומעניק אותו בעסקה סמכותית", async () => {

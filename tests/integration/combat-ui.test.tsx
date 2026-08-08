@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createElement } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -150,6 +150,44 @@ describe("ממשק הקרב", () => {
     expect(screen.getByRole("button", { name: /עמידת מגן/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: /מכה מכרעת/ })).toBeEnabled();
     expect(screen.getAllByRole("progressbar").length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("מציג לכל יכולת איור מקורי מקומי במקום סמל כללי", () => {
+    render(createElement(CombatUI, makeProps()));
+
+    const swordArtwork = screen.getByRole("button", { name: /מכת חרב/ }).querySelector("img");
+    const shieldArtwork = screen.getByRole("button", { name: /עמידת מגן/ }).querySelector("img");
+    expect(swordArtwork?.getAttribute("src")).toContain("ability-sword-strike");
+    expect(shieldArtwork?.getAttribute("src")).toContain("ability-shield-stance");
+  });
+
+  it("מציג משוב חזותי מיידי לנזק שמגיע ממנוע הקרב", async () => {
+    const state = makeState({
+      log: [
+        { sequence: 1, kind: "turn-started", combatantId: player.id, text: "התור של נעמה." },
+        { sequence: 2, kind: "damage", sourceId: player.id, targetId: rat.id, amount: 7, critical: false, text: "פגיעה." },
+      ],
+      nextEventSequence: 3,
+    });
+    render(createElement(CombatUI, makeProps({ state })));
+
+    expect(await screen.findByTestId("combat-event-fx")).toHaveTextContent("-7");
+  });
+
+  it("מנקה אפקט קרב ישן כאשר יומן המפגש מתאפס", async () => {
+    const damageState = makeState({
+      log: [
+        { sequence: 1, kind: "turn-started", combatantId: player.id, text: "התור של נעמה." },
+        { sequence: 2, kind: "damage", sourceId: player.id, targetId: rat.id, amount: 7, critical: false, text: "פגיעה." },
+      ],
+      nextEventSequence: 3,
+    });
+    const { rerender } = render(createElement(CombatUI, makeProps({ state: damageState })));
+
+    expect(await screen.findByTestId("combat-event-fx")).toBeInTheDocument();
+    rerender(createElement(CombatUI, makeProps({ state: makeState() })));
+
+    await waitFor(() => expect(screen.queryByTestId("combat-event-fx")).not.toBeInTheDocument());
   });
 
   it("מדווח על בחירת מטרה", async () => {

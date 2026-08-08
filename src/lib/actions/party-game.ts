@@ -127,8 +127,6 @@ export type PartyGameActionResult =
 type GameSupabaseClient = SupabaseClient<Database>;
 type JsonObject = { [key: string]: Json | undefined };
 
-const PARTY_MEMBER_PRESENCE_WINDOW_MS = 60_000;
-
 type CommandReceipt = {
   commandId: string;
   status: "pending" | "accepted" | "rejected";
@@ -810,49 +808,24 @@ async function resolveDialogueVote(
   sessionVersion: number,
   commandResult: Json,
 ): Promise<PartyGameActionResult> {
-  const [membersResult, votesResult] = await Promise.all([
-    context.serviceClient
-      .from("party_members")
-      .select("character_id,connection_state,last_seen_at")
-      .eq("party_id", context.session.party_id)
-      .is("left_at", null),
-    context.serviceClient
-      .from("party_votes")
-      .select("character_id,choice_id")
-      .eq("session_id", input.sessionId)
-      .eq("scene_id", context.session.current_scene_id)
-      .eq("decision_id", input.payload.decisionId),
-  ]);
-
-  if (membersResult.error || votesResult.error) {
-    return {
-      ok: true,
-      data: {
-        commandId: input.commandId,
-        status: "accepted",
-        sessionVersion,
-        result: commandResult,
-      },
-    };
-  }
-
-  const presenceCutoff = Date.now() - PARTY_MEMBER_PRESENCE_WINDOW_MS;
-  const eligibleMemberIds = new Set(
-    (membersResult.data ?? [])
-      .filter((member) =>
-        member.character_id === input.characterId ||
-        ((member.connection_state === "connected" || member.connection_state === "reconnecting") &&
-          new Date(member.last_seen_at).getTime() >= presenceCutoff),
-      )
-      .map((member) => member.character_id),
-  );
-  const requiredVotes = eligibleMemberIds.size;
-  const submittedVotes = new Set(
-    (votesResult.data ?? [])
-      .filter((vote) => eligibleMemberIds.has(vote.character_id))
-      .map((vote) => vote.character_id),
-  ).size;
-  if (!requiredVotes || submittedVotes < requiredVotes) {
+  // The database locks the session and all active membership leases before it
+  // decides whether the vote is complete. Calling it for every accepted vote
+  // removes the gap where a reconnect could appear between a Node-side count
+  // and the authoritative resolution transaction.
+  const resolvedResult = await context.serviceClient.rpc("resolve_party_vote", {
+    p_session_id: input.sessionId,
+    p_scene_id: context.session.current_scene_id,
+    p_decision_id: input.payload.decisionId,
+  });
+  if (resolvedResult.error) return mapCommandError(resolvedResult.error);
+  const resolved = asJsonObject(resolvedResult.data);
+  const submittedVotes = typeof resolved?.submitted_votes === "number"
+    ? resolved.submitted_votes
+    : 0;
+  const requiredVotes = typeof resolved?.required_votes === "number"
+    ? resolved.required_votes
+    : 0;
+  if (resolved?.pending === true) {
     return {
       ok: true,
       data: {
@@ -867,16 +840,11 @@ async function resolveDialogueVote(
       },
     };
   }
-
-  const resolvedResult = await context.serviceClient.rpc("resolve_party_vote", {
-    p_session_id: input.sessionId,
-    p_scene_id: context.session.current_scene_id,
-    p_decision_id: input.payload.decisionId,
-  });
-  if (resolvedResult.error) return mapCommandError(resolvedResult.error);
-  const resolved = asJsonObject(resolvedResult.data);
   const choiceId = resolved?.choice_id;
   const votes = resolved?.votes;
+  const resolvedSessionVersion = typeof resolved?.session_version === "number"
+    ? resolved.session_version
+    : sessionVersion;
   if (typeof choiceId !== "string" || typeof votes !== "number" || !dialoguesById[input.payload.decisionId]?.choices.some((choice) => choice.id === choiceId)) {
     return { ok: false, code: "INVALID_ACTION", message: "תוצאת ההצבעה שהתקבלה מן השרת אינה תקינה." };
   }
@@ -886,7 +854,7 @@ async function resolveDialogueVote(
     data: {
       commandId: input.commandId,
       status: "accepted",
-      sessionVersion,
+      sessionVersion: resolvedSessionVersion,
       result: commandResult,
       resolvedVote: {
         choiceId,
@@ -1661,10 +1629,11 @@ export async function submitPartyGameCommandAction<Type extends PartyGameCommand
   }
 
   const submitted = input.type === "SUBMIT_DIALOGUE_VOTE"
-    ? await context.userClient.rpc("submit_party_dialogue_vote", {
+    ? await context.serviceClient.rpc("submit_party_dialogue_vote", {
         p_command_id: input.commandId,
         p_session_id: input.sessionId,
         p_character_id: input.characterId,
+        p_owner_id: context.userId,
         p_scene_id: context.session.current_scene_id,
         p_decision_id: input.payload.decisionId,
         p_choice_id: input.payload.choiceId,

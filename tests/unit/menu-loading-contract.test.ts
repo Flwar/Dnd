@@ -55,6 +55,12 @@ describe("menu loading performance contract", () => {
     expect(gameClient).not.toContain('await commit(saveRef.current, "return-to-menu")');
   });
 
+  it("does not revalidate and refresh the active game route after every autosave", async () => {
+    const gameActions = await source("src/lib/actions/game.ts");
+
+    expect(gameActions).not.toContain("revalidatePath(`/game/${parsed.data.character.id}`)");
+  });
+
   it("bounds stalled middleware and server fetches and exposes recovery from nested loaders", async () => {
     const [middlewareClient, serverClient, gameLoading, partyLoading] = await Promise.all([
       source("src/lib/supabase/middleware.ts"),

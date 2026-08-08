@@ -79,6 +79,7 @@ test("authoritative functions cannot be executed by a browser role", async () =>
 
   for (const functionName of [
     "apply_party_command_result",
+    "submit_party_dialogue_vote",
     "resolve_party_vote",
     "resolve_party_loot_claim",
     "grant_character_reward",
@@ -375,4 +376,121 @@ test("party vote resolution excludes departed and stale presence", async () => {
     recoveryMigration,
     /join public\.party_members pm[\s\S]+pm\.character_id = pv\.character_id/i,
   );
+});
+
+test("party heartbeat recovery is owner-bound and only cleans clearly stale rooms", async () => {
+  const recoveryMigration = await readFile(
+    new URL(
+      "../../supabase/migrations/20260808000400_party_heartbeat_recovery.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(recoveryMigration, /create or replace function public\.recover_party_membership\(/i);
+  assert.match(recoveryMigration, /if not private\.is_character_owner\(p_character_id\)/i);
+  assert.match(
+    recoveryMigration,
+    /create or replace function public\.submit_party_dialogue_vote\([\s\S]+pg_catalog\.pg_advisory_xact_lock\([\s\S]+command_id = p_command_id/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /revoke all on function public\.submit_party_dialogue_vote\(uuid, uuid, uuid, text, text, text\)[\s\S]+drop function public\.submit_party_dialogue_vote\(uuid, uuid, uuid, text, text, text\)/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /create or replace function public\.submit_party_dialogue_vote\(\s*p_command_id uuid,\s*p_session_id uuid,\s*p_character_id uuid,\s*p_owner_id uuid/i,
+  );
+  assert.match(recoveryMigration, /if auth\.role\(\) <> 'service_role'/i);
+  assert.match(
+    recoveryMigration,
+    /from public\.characters c[\s\S]+c\.id = p_character_id[\s\S]+c\.owner_id = p_owner_id/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /revoke all on function public\.submit_party_dialogue_vote\(uuid, uuid, uuid, uuid, text, text, text\)\s+from public, anon, authenticated;[\s\S]+grant execute on function public\.submit_party_dialogue_vote\(uuid, uuid, uuid, uuid, text, text, text\)\s+to service_role;/i,
+  );
+  assert.doesNotMatch(
+    recoveryMigration,
+    /grant execute on function public\.submit_party_dialogue_vote\([^;]+to authenticated/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /grant execute on function public\.recover_party_membership\(uuid\)\s+to authenticated/i,
+  );
+  assert.match(recoveryMigration, /last_seen_at >= now\(\) - interval '180 seconds'/i);
+  assert.match(
+    recoveryMigration,
+    /from public\.party_members member[\s\S]+order by member\.character_id\s+for update;[\s\S]+submitted_members < eligible_members/i,
+  );
+  assert.match(recoveryMigration, /'pending', true,[\s\S]+'required_votes', eligible_members/i);
+  assert.match(recoveryMigration, /#> array\['resolved_votes', p_scene_id, p_decision_id\]/i);
+  assert.match(recoveryMigration, /'DIALOGUE_VOTE_RESOLVED'/i);
+  assert.match(recoveryMigration, /version = version \+ 1/i);
+  assert.match(
+    recoveryMigration,
+    /'session_version', target_session\.version \+ 1/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /'leader_broke_tie', tied_choices > 1 and winning_choice = leader_choice/i,
+  );
+  assert.match(recoveryMigration, /member\.last_seen_at >= now\(\) - interval '15 minutes'/i);
+  assert.match(
+    recoveryMigration,
+    /not exists \([\s\S]+session\.status in \('forming', 'active'\)[\s\S]+\)\s+loop/i,
+  );
+  assert.match(
+    recoveryMigration,
+    /loop[\s\S]+from public\.parties party[\s\S]+for update;[\s\S]+from public\.party_members member[\s\S]+for update;[\s\S]+and not exists \([\s\S]+session\.status in \('forming', 'active'\)[\s\S]+then[\s\S]+update public\.party_members/i,
+  );
+  assert.match(recoveryMigration, /notify pgrst, 'reload schema'/i);
+});
+
+test("cloud saves apply account backpressure and avoid unbounded snapshot scans", async () => {
+  const saveMigration = await readFile(
+    new URL(
+      "../../supabase/migrations/20260808000500_save_snapshot_backpressure.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(saveMigration, /create or replace function private\.calculate_profile_playtime/i);
+  assert.match(
+    saveMigration,
+    /left join lateral \([\s\S]+order by ss\.save_version desc[\s\S]+limit 1/i,
+  );
+  assert.match(
+    saveMigration,
+    /profile_total_start_marker constant text := 'total_playtime_seconds = coalesce\(\('/i,
+  );
+  assert.match(
+    saveMigration,
+    /profile_total_end_marker constant text := 'last_active_at = now\(\)'/i,
+  );
+  assert.match(
+    saveMigration,
+    /if strpos\(save_function_definition, optimized_marker\) > 0 then[\s\S]+optimized_function_definition := save_function_definition/i,
+  );
+  assert.doesNotMatch(saveMigration, /optimized_function_definition := replace\(/i);
+  assert.match(saveMigration, /new\.level is distinct from old\.level/i);
+  assert.match(
+    saveMigration,
+    /alter function public\.save_character_snapshot\([^;]+rename to save_character_snapshot_core/i,
+  );
+  assert.match(
+    saveMigration,
+    /revoke all on function public\.save_character_snapshot_core\([^;]+from public, anon, authenticated/i,
+  );
+  assert.doesNotMatch(
+    saveMigration,
+    /grant execute on function public\.save_character_snapshot_core\([^;]+to authenticated/i,
+  );
+  assert.match(saveMigration, /set lock_timeout = '1500ms'/i);
+  assert.match(
+    saveMigration,
+    /pg_try_advisory_xact_lock\([\s\S]+hashtextextended\('profile-save:' \|\| caller_id::text, 0\)/i,
+  );
+  assert.match(saveMigration, /errcode = '55P03',[\s\S]+message = 'SAVE_IN_PROGRESS'/i);
 });

@@ -109,6 +109,20 @@ async function main() {
     assert.equal(policyCount, 25);
     assert.ok(functionCount >= 34);
     assert.equal(rewardCount, 6);
+    assert.equal(
+      await scalar(
+        database,
+        "select has_function_privilege('authenticated', 'public.save_character_snapshot(uuid,uuid,integer,jsonb,text)', 'execute')",
+      ),
+      true,
+    );
+    assert.equal(
+      await scalar(
+        database,
+        "select has_function_privilege('authenticated', 'public.save_character_snapshot_core(uuid,uuid,integer,jsonb,text)', 'execute')",
+      ),
+      false,
+    );
 
     await database.query(
       "insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)",
@@ -391,6 +405,10 @@ async function main() {
       current_location_id: "arfelon-square",
       save_version: 2,
     });
+    assert.equal(
+      await scalar(database, "select total_playtime_seconds from public.profiles where id = $1", [userId]),
+      60,
+    );
     assert.equal(
       await scalar(database, "select count(*)::int from public.character_inventory where character_id = $1", [characterId]),
       inventory.length,

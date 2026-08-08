@@ -22,6 +22,10 @@ export const partyCharacterInputSchema = z.object({
   characterId: uuidSchema,
 });
 
+export const partyMembershipRecoveryInputSchema = z.object({
+  characterId: uuidSchema,
+});
+
 export const readyPartyInputSchema = partyCharacterInputSchema.extend({
   ready: z.boolean(),
 });
@@ -40,6 +44,7 @@ export const connectionInputSchema = partyCharacterInputSchema.extend({
 export type CreatePartyInput = z.input<typeof createPartyInputSchema>;
 export type JoinPartyInput = z.input<typeof joinPartyInputSchema>;
 export type PartyCharacterInput = z.input<typeof partyCharacterInputSchema>;
+export type PartyMembershipRecoveryInput = z.input<typeof partyMembershipRecoveryInputSchema>;
 export type ReadyPartyInput = z.input<typeof readyPartyInputSchema>;
 export type PartyIdInput = z.input<typeof partyIdInputSchema>;
 export type TransferLeadershipInput = z.input<typeof transferLeadershipInputSchema>;

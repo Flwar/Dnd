@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { GameButton } from "@/components/ui/GameButton";
 import { acquireBodyScrollLock } from "@/lib/body-scroll-lock";
@@ -23,6 +23,7 @@ export function Modal({ open, title, onClose, children, className, overlayClassN
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     closeRef.current = onClose;
@@ -35,7 +36,7 @@ export function Modal({ open, title, onClose, children, className, overlayClassN
     const focusables = () => Array.from(panel?.querySelectorAll<HTMLElement>(
       "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
     ) ?? []);
-    window.setTimeout(() => focusables()[0]?.focus(), 0);
+    const focusTimer = window.setTimeout(() => focusables()[0]?.focus(), 0);
     const onKeyDown = (event: KeyboardEvent) => {
       // A modal owns keyboard input while it is open. In particular, this
       // prevents game and dialogue shortcuts registered on `window` from
@@ -62,6 +63,7 @@ export function Modal({ open, title, onClose, children, className, overlayClassN
     document.addEventListener("keydown", onKeyDown);
     const releaseScrollLock = acquireBodyScrollLock();
     return () => {
+      window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", onKeyDown);
       releaseScrollLock();
       previous?.focus();
@@ -73,10 +75,11 @@ export function Modal({ open, title, onClose, children, className, overlayClassN
     <AnimatePresence>
       {open ? (
         <motion.div
-          className={cn("fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/78 p-0 backdrop-blur-sm sm:p-5", overlayClassName)}
+          className={cn("modal-vault fixed inset-0 z-[100] grid place-items-center overflow-y-auto p-0 backdrop-blur-sm sm:p-5", overlayClassName)}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.18 }}
           onMouseDown={(event) => {
             if (event.currentTarget === event.target && allowClose) onClose();
           }}
@@ -86,16 +89,19 @@ export function Modal({ open, title, onClose, children, className, overlayClassN
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className={cn("mobile-safe-modal stone-panel relative my-auto max-h-dvh w-full overscroll-contain overflow-x-hidden overflow-y-auto sm:max-h-[calc(100dvh-2.5rem)] sm:max-w-4xl", className)}
-            initial={{ opacity: 0, y: 18, scale: 0.985 }}
+            className={cn("modal-vault__panel mobile-safe-modal stone-panel relative my-auto max-h-dvh w-full overscroll-contain overflow-x-hidden overflow-y-auto sm:max-h-[calc(100dvh-2.5rem)] sm:max-w-4xl", className)}
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 22, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.99 }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.99 }}
+            transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
-            <header className="mb-5 flex items-center justify-between gap-4 border-b border-[#c6a15b]/20 pb-4">
-              <h2 id={titleId} className="display-font text-2xl text-[#f0cf82] sm:text-3xl">{title}</h2>
+            <header className="modal-vault__header flex items-center justify-between gap-4 border-b border-[#c6a15b]/20">
+              <div className="flex min-w-0 items-center gap-4">
+                <span className="modal-vault__title-mark" aria-hidden="true"><span>✦</span></span>
+                <h2 id={titleId} className="display-font min-w-0 text-2xl leading-tight text-[#f0cf82] sm:text-3xl">{title}</h2>
+              </div>
               {allowClose ? (
-                <GameButton variant="ghost" size="icon" onClick={onClose} aria-label={closeLabel}>
+                <GameButton variant="ghost" size="icon" className="shrink-0" onClick={onClose} aria-label={closeLabel}>
                   <X className="size-6" aria-hidden="true" />
                 </GameButton>
               ) : null}
